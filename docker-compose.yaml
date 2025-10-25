@@ -1,0 +1,19 @@
+services:
+  agent-api:
+    container_name: learn-ai-agents
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - learn-ai-agents-network
+
+volumes:
+  data:
+
+networks:
+  learn-ai-agents-network:
+    name: learn-ai-agents-network
