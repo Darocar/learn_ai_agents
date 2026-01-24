@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Run Learn AI Agents",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "learn_ai_agents",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "envFile": "${workspaceFolder}/src/learn_ai_agents/.env",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
