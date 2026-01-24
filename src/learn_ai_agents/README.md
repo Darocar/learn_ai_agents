@@ -505,6 +505,407 @@ class MongoConversationRepository:
 
 ---
 
+## 🏗️ Container-Based Dependency Injection
+
+### Architecture Overview
+
+The application uses a multi-layered container system for dependency injection:
+
+```
+AppContainer
+├── ComponentsContainer   (LLMs, Tools, Databases)
+├── AgentsContainer       (AI Agents using components)
+└── UseCasesContainer     (Business logic using agents)
+```
+
+### Container Initialization Flow
+
+```python
+# app_factory.py - Lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Build container asynchronously
+    container = await AppContainer.build(settings=app_settings)
+    app.state.container = container
+    
+    try:
+        yield
+    finally:
+        # Clean up resources
+        await container.shutdown()
+```
+
+### ComponentsContainer
+
+**Purpose**: Manages infrastructure components (LLMs, databases, tools) with lazy loading and caching.
+
+```python
+# Defined in settings.yaml
+components:
+  llms:
+    langchain:
+      groq:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.llms.langchain_fwk.groq.LangchainGroqChatModelAdapter
+          api_key: ${GROQ_API_KEY}
+        instances:
+          default:
+            params:
+              temperature: 0.1
+```
+
+**Key Features**:
+- Lazy instantiation (components created on first access)
+- Singleton pattern (cached after creation)
+- Resolves component references (e.g., `llms.langchain.groq.default`)
+- Extracts `SecretStr` values automatically
+- Thread-safe with `RLock`
+
+### AgentsContainer
+
+**Purpose**: Creates and manages AI agents that use components.
+
+```python
+# Defined in settings.yaml
+agents:
+  langchain:
+    basic_answer:
+      info:
+        name: Basic Answer Agent
+        description: An agent that provides basic answers
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.basic_answer.agent.BasicAnswerLangChainAgent
+        components:
+          llms:
+            default: llms.langchain.groq.default
+```
+
+**Component Resolution**:
+```python
+# Agent receives resolved components, not references
+agent = BasicAnswerLangChainAgent(
+    config={...},
+    llms={
+        "default": <LangchainGroqChatModelAdapter instance>
+    }
+)
+```
+
+### UseCasesContainer
+
+**Purpose**: Creates use cases that orchestrate agents for business logic.
+
+```python
+# Defined in settings.yaml
+use_cases:
+  basic_answer:
+    info:
+      name: Basic Answer Use Case
+      path_prefix: /01_basic_answer
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.basic_answer:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.basic_answer.basic_answer.BasicAnswerUseCase
+      components:
+        agents:
+          agent: agents.langchain.basic_answer
+```
+
+**Use Case Injection**:
+```python
+# Use case receives resolved agents
+use_case = BasicAnswerUseCase(
+    agent=<BasicAnswerLangChainAgent instance>,
+    mapper=Mapper()
+)
+```
+
+### Accessing Dependencies in Controllers
+
+Controllers use FastAPI's dependency injection:
+
+```python
+# infrastructure/inbound/controllers/dependencies.py
+def get_basic_answer_use_case(request: Request) -> BasicAnswerUseCase:
+    container = request.app.state.container
+    return container.use_cases.get("basic_answer")
+
+# Controller endpoint
+@router.post("/ainvoke")
+async def ainvoke(
+    dto: AnswerRequestDTO,
+    use_case: BasicAnswerUseCase = Depends(get_basic_answer_use_case),
+):
+    return await use_case.ainvoke(dto)
+```
+
+---
+
+## 🎯 Creating New Components
+
+### 1. Adding a New LLM Provider
+
+**Step 1**: Create the adapter class
+
+```python
+# infrastructure/outbound/llms/langchain_fwk/openai.py
+from typing import Any
+from langchain_openai import ChatOpenAI
+from learn_ai_agents.application.outbound_ports.agents.llm_model import ChatModelProvider
+
+class LangchainOpenAIChatModelAdapter(ChatModelProvider):
+    def __init__(self, config: dict[str, Any]) -> None:
+        self._model = ChatOpenAI(
+            model=config.get("model", "gpt-4"),
+            temperature=config.get("temperature", 0.1),
+            api_key=config["api_key"],
+        )
+    
+    def get_model(self) -> BaseChatModel:
+        return self._model
+```
+
+**Step 2**: Add to `settings.yaml`
+
+```yaml
+components:
+  llms:
+    langchain:
+      openai:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.llms.langchain_fwk.openai.LangchainOpenAIChatModelAdapter
+          api_key: ${OPENAI_API_KEY}
+        instances:
+          default:
+            params:
+              model: gpt-4
+              temperature: 0.2
+```
+
+**Step 3**: Reference in agent configuration
+
+```yaml
+agents:
+  langchain:
+    gpt_answer:
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.basic_answer.agent.BasicAnswerLangChainAgent
+        components:
+          llms:
+            default: llms.langchain.openai.default  # Use new LLM
+```
+
+### 2. Creating a New Agent
+
+**Step 1**: Implement the agent class
+
+```python
+# infrastructure/outbound/agents/langchain_fwk/custom/my_agent.py
+from learn_ai_agents.application.outbound_ports.agents.llm_model import ChatModelProvider
+from learn_ai_agents.domain.models.agents.config import Config
+from learn_ai_agents.domain.models.agents.messages import Message
+
+class MyCustomAgent:
+    def __init__(self, *, config: dict, llms: dict[str, ChatModelProvider]):
+        self.llm = llms["default"]
+        self.custom_setting = config.get("custom_setting", "default")
+    
+    async def ainvoke(self, new_message: Message, config: Config, **kwargs) -> Message:
+        # Your agent logic here
+        model = self.llm.get_model()
+        response = await model.ainvoke([new_message])
+        return Message(
+            role=Role.ASSISTANT,
+            content=response.content,
+            timestamp=Helper.generate_timestamp()
+        )
+```
+
+**Step 2**: Add to `settings.yaml`
+
+```yaml
+agents:
+  langchain:
+    my_custom:
+      info:
+        name: My Custom Agent
+        description: Does something special
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.custom.my_agent.MyCustomAgent
+        components:
+          llms:
+            default: llms.langchain.groq.default
+        config:
+          custom_setting: special_value
+```
+
+### 3. Creating a New Use Case
+
+**Step 1**: Define DTOs
+
+```python
+# application/dtos/agents/my_feature.py
+from pydantic import BaseModel
+
+class MyFeatureRequestDTO(BaseModel):
+    input_text: str
+    config: ConfigDTO
+
+class MyFeatureResultDTO(BaseModel):
+    output_text: str
+```
+
+**Step 2**: Create the use case
+
+```python
+# application/use_cases/agents/my_feature/use_case.py
+from learn_ai_agents.application.outbound_ports.agents.agent_engine import AgentEngine
+
+class MyFeatureUseCase:
+    def __init__(self, *, agent: AgentEngine, mapper: Mapper):
+        self._agent = agent
+        self._mapper = mapper
+    
+    async def ainvoke(self, cmd: MyFeatureRequestDTO) -> MyFeatureResultDTO:
+        message = self._mapper.dto_to_message(cmd)
+        config = self._mapper.dto_to_config(cmd)
+        
+        response = await self._agent.ainvoke(message, config)
+        
+        return self._mapper.message_to_dto(response, config)
+```
+
+**Step 3**: Create controller
+
+```python
+# infrastructure/inbound/controllers/agents/my_feature.py
+from fastapi import APIRouter, Depends
+
+def get_router(use_case_config: UseCaseConfig) -> APIRouter:
+    router = APIRouter(prefix=use_case_config.info.path_prefix)
+    
+    @router.post("/invoke")
+    async def invoke(
+        dto: MyFeatureRequestDTO,
+        use_case: MyFeatureUseCase = Depends(get_my_feature_use_case),
+    ):
+        return await use_case.ainvoke(dto)
+    
+    return router
+```
+
+**Step 4**: Add dependency injection
+
+```python
+# infrastructure/inbound/controllers/dependencies.py
+def get_my_feature_use_case(request: Request) -> MyFeatureUseCase:
+    container = request.app.state.container
+    return container.use_cases.get("my_feature")
+```
+
+**Step 5**: Configure in `settings.yaml`
+
+```yaml
+use_cases:
+  my_feature:
+    info:
+      name: My Feature Use Case
+      description: Implements my custom feature
+      path_prefix: /my_feature
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.my_feature:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.my_feature.use_case.MyFeatureUseCase
+      components:
+        agents:
+          agent: agents.langchain.my_custom
+```
+
+---
+
+## ⚠️ Important Domain Model Changes
+
+### Message Class with Timestamp
+
+The `Message` domain model now requires a `timestamp` field:
+
+```python
+from datetime import datetime
+from learn_ai_agents.infrastructure.helpers.generators import Helper
+
+# ✅ Correct
+message = Message(
+    role=Role.USER,
+    content="Hello",
+    timestamp=Helper.generate_timestamp()  # Required!
+)
+
+# ❌ Wrong - will raise TypeError
+message = Message(
+    role=Role.USER,
+    content="Hello"
+)
+```
+
+**Why?**
+- Tracks message creation time for conversation history
+- Required for proper conversation management
+- Consistent timestamping across the system
+
+### Helper Utilities
+
+```python
+from learn_ai_agents.infrastructure.helpers.generators import Helper
+
+# Generate timestamp
+timestamp = Helper.generate_timestamp()  # Returns datetime
+
+# Generate UUID
+id = Helper.generate_uuid()  # Returns UUID string
+```
+
+---
+
+## 🔧 Configuration Best Practices
+
+### Environment Variables
+
+Use environment variables for secrets in `settings.yaml`:
+
+```yaml
+components:
+  llms:
+    langchain:
+      groq:
+        constructor:
+          api_key: ${GROQ_API_KEY}  # Reads from environment
+```
+
+### Component References
+
+Use `_ref` suffix for component dependencies:
+
+```yaml
+# This won't work - wrong syntax
+components:
+  tools:
+    my_tool:
+      params:
+        llm: llms.langchain.groq.default  # Wrong!
+
+# ✅ Correct - use _ref suffix
+components:
+  tools:
+    my_tool:
+      params:
+        llm_ref: llms.langchain.groq.default  # ComponentsContainer resolves this
+```
+
+The container automatically:
+1. Detects `*_ref` parameters
+2. Resolves the reference to the actual component instance
+3. Strips the `_ref` suffix when passing to constructor
+
+---
+
 ## 📚 Further Reading
 
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)

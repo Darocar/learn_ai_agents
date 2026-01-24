@@ -1,54 +1,77 @@
-"""Application dependency injection container."""
+"""Application container for dependency injection.
 
-import os
+This module provides the main application container that composes all
+components, agents, and use cases using dependency injection.
+"""
 
-from learn_ai_agents.application.use_cases.basic_answer.basic_answer import BasicAnswerUseCase
-from learn_ai_agents.infrastructure.outbound.agents.basic_answer import LangChainBasicAnswerAgent
-from learn_ai_agents.infrastructure.outbound.llms.groq import GroqChatModelProvider
+# infrastructure/bootstrap/app_container.py
+from dataclasses import dataclass
+
 from learn_ai_agents.logging import get_logger
 from learn_ai_agents.settings import AppSettings
+from typing_extensions import Self
+
+from .agents_container import AgentsContainer
+from .components_container import ComponentsContainer
+from .use_cases_container import UseCasesContainer
 
 logger = get_logger(__name__)
 
 
+@dataclass
 class AppContainer:
-    """Container for application dependencies."""
+    """Main application container for dependency injection.
 
-    def __init__(self, settings: AppSettings):
-        """Initialize container with settings.
+    This container orchestrates the composition of all application layers:
+    - Components (LLMs, tools, etc.)
+    - Agents (AI processing engines)
+    - Use Cases (business logic)
+
+    Attributes:
+        settings: The application settings used to build this container.
+        components: Container for infrastructure components (LLMs, etc.).
+        agents: Container for agent instances.
+        use_cases: Container for use case instances.
+    """
+
+    settings: AppSettings
+    components: ComponentsContainer
+    agents: AgentsContainer
+    use_cases: UseCasesContainer
+
+    @classmethod
+    async def build(cls, settings: AppSettings) -> Self:
+        """Build and initialize the complete application container.
+
+        Creates all containers in the correct dependency order:
+        components (with databases connected) → agents → use cases.
 
         Args:
-            settings: Application settings
-        """
-        self.settings = settings
-        self._basic_answer_use_case: BasicAnswerUseCase | None = None
-
-    def get_basic_answer_use_case(self) -> BasicAnswerUseCase:
-        """Build and return BasicAnswerUseCase with all dependencies.
+            settings: AppSettings instance to use for building the container.
 
         Returns:
-            Configured use case instance
+            Fully initialized AppContainer instance.
         """
-        if self._basic_answer_use_case is None:
-            logger.info("🔧 Building BasicAnswerUseCase with dependencies...")
 
-            # Get API key from environment
-            groq_api_key = os.getenv("GROQ_API_KEY")
-            if not groq_api_key:
-                raise ValueError("GROQ_API_KEY environment variable not set")
+        logger.info("🔧 Building application components...")
+        components = await ComponentsContainer.create(settings)
 
-            # Build outbound adapters
-            llm_provider = GroqChatModelProvider(
-                api_key=groq_api_key,
-                model_name="llama-3.3-70b-versatile",
-                temperature=0.7,
-            )
+        logger.info("🤖 Initializing agents...")
+        agents = AgentsContainer.create(settings, components)
 
-            agent_engine = LangChainBasicAnswerAgent(chat_model_provider=llm_provider)
+        logger.info("📦 Setting up use cases...")
+        use_cases = UseCasesContainer.create(settings, agents, components)
 
-            # Build use case with injected dependencies
-            self._basic_answer_use_case = BasicAnswerUseCase(agent=agent_engine)
+        logger.info("✅ Container build complete")
+        return cls(settings, components, agents, use_cases)
 
-            logger.info("✅ BasicAnswerUseCase built successfully")
+    async def shutdown(self) -> None:
+        """Shutdown the container and dispose of resources.
 
-        return self._basic_answer_use_case
+        Ensures proper cleanup of long-lived resources like LLM clients,
+        database connections, etc.
+        """
+        logger.info("🧹 Cleaning up resources...")
+        # make sure to dispose long-lived stuff (LLMs, stores, etc.)
+        await self.components.shutdown()
+        logger.info("✅ Resources cleaned up")

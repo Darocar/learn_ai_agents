@@ -1,12 +1,13 @@
 """Mapper utilities for DTO ↔ Domain model conversion."""
 
-from learn_ai_agents.application.dtos.basic_answer import (
+from learn_ai_agents.application.dtos.agents.basic_answer import (
     AnswerRequestDTO,
     AnswerResultDTO,
     AssistantMessageDTO,
 )
-from learn_ai_agents.domain.models.config import Config
-from learn_ai_agents.domain.models.messages import Message, Role
+from learn_ai_agents.domain.models.agents.config import Config
+from learn_ai_agents.domain.models.agents.messages import Message, Role
+from learn_ai_agents.infrastructure.helpers.generators import Helper
 
 
 class Mapper:
@@ -18,6 +19,7 @@ class Mapper:
         return Message(
             role=Role.USER,
             content=dto.message,
+            timestamp=Helper.generate_timestamp(),
         )
 
     @staticmethod

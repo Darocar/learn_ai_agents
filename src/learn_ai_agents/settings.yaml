@@ -3,7 +3,7 @@ components:
     langchain:
       groq:
         constructor:
-          module_class: learn_ai_agents.infrastructure.outbound.llms.langchain_fwk.LangchainGroqChatModelAdapter
+          module_class: learn_ai_agents.infrastructure.outbound.llms.langchain_fwk.groq.LangchainGroqChatModelAdapter
           api_key: ${GROQ_API_KEY}
         instances:
           default:
@@ -30,7 +30,7 @@ use_cases:
       path_prefix: /01_basic_answer
       router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.basic_answer:get_router
     constructor:
-      module_class: learn_ai_agents.application.use_cases.agents.basic_answer.use_case.BasicAnswerUseCase
+      module_class: learn_ai_agents.application.use_cases.agents.basic_answer.basic_answer.BasicAnswerUseCase
       components:
         agents:
           agent: agents.langchain.basic_answer
