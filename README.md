@@ -1,24 +1,30 @@
-# LEARN-AI-AGENTS — Branch `03_adding_memory_v2`
+# LEARN-AI-AGENTS — Branch `04_adding_tools_v2`
 
-This branch adds **Conversation Memory** with **MongoDB Persistence** and **LangGraph State Management**.
+This branch adds **Tool Integration** with **LangGraph Tool Calling** for external capabilities.
 
 **What's new in this branch:**
-- ✅ **Memory System**: Complete hexagonal implementation with MongoDB persistence
-  - LangGraph StateGraph for conversation flow
-  - MongoDB checkpointing for state persistence
-  - Chat history storage with conversation tracking
-  - Async MongoDB adapters (Motor + Odmantic)
-- ✅ **Adding Memory Agent**: LangGraph-based agent with memory capabilities
-- ✅ **Database Infrastructure**: MongoDB engine adapters and base repository patterns
-- ✅ **Enhanced Base Agent**: Support for chat history, tools, and tracing
-- ✅ **Eager Initialization**: Databases connect during container creation
+- ✅ **Tools System**: Complete hexagonal implementation for external tool integration
+  - Age calculator tool (calculate age from birth date)
+  - Math expression evaluator (safe mathematical calculations)
+  - Web search tool (DuckDuckGo integration)
+  - Framework-agnostic tool ports with LangChain adapters
+- ✅ **Adding Tools Agent**: LangGraph agent with tool binding and execution
+  - Automatic tool selection based on user query
+  - Tool call handling and result integration
+  - Memory and checkpointing with tools
+- ✅ **Tool Architecture**: Clean separation of concerns
+  - Base tools (pure Python business logic)
+  - LangChain tool adapters (framework-specific wrappers)
+  - Tool ports for dependency injection
+- **From Branch 03:**
+  - ✅ **Memory System**: MongoDB persistence and LangGraph state management
+  - ✅ **Database Infrastructure**: Async MongoDB adapters (Motor + Odmantic)
 - **From Branch 02:**
-  - ✅ **Streamlit Web UI**: Interactive chat interface with use case selection
-  - ✅ **Discovery System**: Complete hexagonal implementation for system introspection
-  - ✅ **VS Code Launch Configurations**: Debug both FastAPI and Streamlit
-  - ✅ **Monorepo Structure**: Workspace with multiple packages
+  - ✅ **Streamlit Web UI**: Interactive chat interface
+  - ✅ **Discovery System**: System introspection
+  - ✅ **VS Code Launch Configurations**
 
-> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Groq** + **Streamlit**
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Groq** + **DuckDuckGo** + **Streamlit**
 
 ---
 
@@ -26,7 +32,38 @@ This branch adds **Conversation Memory** with **MongoDB Persistence** and **Lang
 
 ### New Features
 
-#### 1. Memory System with MongoDB Persistence
+#### 1. Tools System with Hexagonal Architecture
+Complete tool integration following ports and adapters:
+
+**Tool Ports** (`application/outbound_ports/agents/tools.py`):
+- Framework-independent tool interface
+- Each tool exposes `name`, `description`, and `get_tool()` method
+
+**Base Tools** (`infrastructure/outbound/tools/base/`):
+- **Age Calculator**: Pure Python function to calculate age from birth date
+  - Input: Birth date in yyyy-mm-dd format
+  - Output: Age in years
+  - Error handling for invalid dates and future dates
+- **Math Expression Evaluator**: Safe mathematical calculation using AST
+  - Supports: +, -, *, /, **, //, %, parentheses
+  - Prevents arbitrary code execution
+  - Examples: "2 + 2", "(10 * 5) / 2"
+
+**LangChain Tool Adapters** (`infrastructure/outbound/tools/langchain_fwk/`):
+- **LangChainAgeCalculatorToolAdapter**: Wraps age calculator for LangChain
+- **LangChainMathExpressionToolAdapter**: Wraps math evaluator for LangChain  
+- **LangChainWebSearchToolAdapter**: DuckDuckGo search integration
+  - Uses `langchain-community` DuckDuckGoSearchResults
+  - Returns JSON results from web search
+
+**Adding Tools Agent** (`infrastructure/outbound/agents/langchain_fwk/adding_tools/`):
+- LangGraph StateGraph with tool binding
+- Automatic tool selection based on user queries
+- Tool execution integrated into conversation flow
+- Memory + Tools: Combines checkpointing with tool calls
+- State management for tool results
+
+#### 2. Memory System with MongoDB Persistence (from Branch 03)
 Complete stateful conversation implementation:
 - **Database Adapters**:
   - `MongoEngineAdapter`: Odmantic-based MongoDB engine
@@ -45,7 +82,7 @@ Complete stateful conversation implementation:
 - **Base Repository Pattern**: `BaseMongoModelRepository` for MongoDB operations
 - **Eager Database Initialization**: Databases connect during DI container creation
 
-#### 2. Discovery System (Hexagonal Implementation)
+#### 3. Discovery System (Hexagonal Implementation from Branch 02)
 Complete implementation following the architecture:
 - **Domain Models**: `Component`, `Agent`, `UseCase` entities
 - **Service**: `SettingsResourceDiscovery` reads configuration
@@ -53,7 +90,7 @@ Complete implementation following the architecture:
 - **API Endpoints**: `/discover/components`, `/discover/agents`, `/discover/use-cases`, `/discover/all`
 - **Purpose**: Runtime introspection of the system configuration
 
-#### 3. Streamlit UI
+#### 4. Streamlit UI (from Branch 02)
 Web interface for interacting with agents:
 - **Home Page**: System overview with discovery information
 - **Chat Page**: 
@@ -63,7 +100,7 @@ Web interface for interacting with agents:
   - Conversation management (ID tracking, clear/reset)
 - **Responsive Design**: Clean, minimal interface
 
-#### 4. Development Tools
+#### 5. Development Tools
 - **Launch Configurations**: `.vscode/launch.json` for debugging
   - `Run learn_ai_agents`: Debug FastAPI application
   - `Run streamlit`: Debug Streamlit UI
@@ -226,6 +263,56 @@ pyproject.toml                             # Updated with streamlit_ui workspace
 ---
 
 ## 🔄 Request Flow
+
+### Tools-Enabled Chat Flow
+```
+POST /04_adding_tools/invoke
+  → AddingToolsUseCase.ainvoke()
+  → Load conversation from MongoDB (if exists)
+  → AddingToolsLangchainAgent.ainvoke()
+    → LangGraph StateGraph execution:
+      1. Load checkpointed state (if exists)
+    Basic Chat Flow (Stateless from Branch 01)new message to state
+      3. Execute chatbot_node:
+         - LLM decides if tools are needed
+         - If yes: calls tools with arguments
+         - Tool execution returns results
+         - LLM generates final response with tool results
+      4. Save checkpoint to MongoDB
+  → Save messages to chat history
+  → Return AIMessage response (with tool results if used)
+```
+
+**Example Tool Usage**:
+- User: "What's 45 * 23?"
+  - Agent calls `math_expression` tool with "45 * 23"
+  - Tool returns "1035"
+  - Agent responds: "The result is 1035"
+
+- User: "How old is someone born on 1990-05-15?"
+  - Agent calls `age_calculator` tool with "1990-05-15"
+  - Tool returns "34 years old"
+  - Agent responds: "They are 34 years old"
+
+- User: "Search for latest AI news"
+  - Agent calls `duckduckgo_results_json` tool with query
+  - Tool returns web search results
+  - Agent summarizes findings
+
+### Memory-Enabled Chat Flow (from Branch 03)
+```
+POST /03_adding_memory/invoke
+  → AddingMemoryUseCase.ainvoke()
+  → Load conversation from MongoDB (if exists)
+  → AddingMemoryLangGraphAgent.ainvoke()
+    → LangGraph StateGraph execution:
+      1. Load checkpointed state (if exists)
+      2. Add new message to state
+      3. Execute chatbot_node (with LLM)
+      4. Save checkpoint to MongoDB
+  → Save messages to chat history
+  → Return AIMessage response
+```
 
 ### Discovery Flow
 ```

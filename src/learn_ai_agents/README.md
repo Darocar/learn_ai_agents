@@ -1,16 +1,18 @@
-# learn_ai_agents — Code Documentation (Branch 03_adding_memory_v2)
+# learn_ai_agents — Code Documentation (Branch 04_adding_tools_v2)
 
 > This README explains the **code structure**, **component interactions**, and **implementation patterns** for this branch.
 
 ## 🆕 What's New in This Branch
 
 This branch adds:
-1. **Memory System**: Complete MongoDB-backed conversation persistence with LangGraph
-2. **Database Infrastructure**: Async MongoDB adapters (Motor + Odmantic)
-3. **Adding Memory Agent**: LangGraph StateGraph with checkpointing
-4. **Enhanced Base Agent**: Support for chat history, tools, and tracing
-5. **Discovery System**: Complete hexagonal implementation for system introspection (from Branch 02)
-6. **Streamlit UI**: Web interface for interactive agent exploration (from Branch 02)
+1. **Tools System**: Complete hexagonal implementation for external tool integration
+2. **Adding Tools Agent**: LangGraph StateGraph with tool binding and execution
+3. **Base Tools**: Pure Python business logic (age calculator, math evaluator)
+4. **LangChain Tool Adapters**: Framework-specific wrappers (web search included)
+5. **Memory System**: Complete MongoDB-backed conversation persistence (from Branch 03)
+6. **Database Infrastructure**: Async MongoDB adapters (from Branch 03)
+7. **Discovery System**: System introspection (from Branch 02)
+8. **Streamlit UI**: Web interface (from Branch 02)
 
 ---
 
@@ -52,7 +54,210 @@ This codebase follows **Ports and Adapters** (Hexagonal Architecture):
 
 ---
 
-## 🧠 Memory System Architecture
+## 🛠️ Tools System Architecture
+
+This branch implements a complete tool integration system following hexagonal architecture:
+
+### Tool Port (`application/outbound_ports/agents/tools.py`)
+
+Framework-independent interface for tools:
+
+```python
+class ToolPort(Protocol):
+    """Port for exposing a tool to an agent."""
+    
+    name: str
+    description: str
+    
+    def get_tool(self) -> Any:
+        """Return the underlying framework-specific tool object."""
+        ...
+```
+
+### Base Tools (`infrastructure/outbound/tools/base/`)
+
+Pure Python business logic with zero framework dependencies:
+
+**Age Calculator** (`age_calculator.py`):
+```python
+def calculate_age(birth_date: str) -> str:
+    """Calculate age based on birth date.
+    
+    Args:
+        birth_date: yyyy-mm-dd format (e.g., '1990-05-15')
+    
+    Returns:
+        Age description or error message
+    """
+    try:
+        birth = datetime.strptime(birth_date, "%Y-%m-%d")
+        today = datetime.now()
+        age = today.year - birth.year
+        
+        # Adjust if birthday hasn't occurred this year
+        if (today.month, today.day) < (birth.month, birth.day):
+            age -= 1
+            
+        return f"{age} years old."
+    except ValueError:
+        return "Error: Invalid date format. Use yyyy-mm-dd."
+```
+
+**Math Expression Evaluator** (`math_expressions.py`):
+```python
+def calculate_math_expression(math_expression: str) -> str:
+    """Evaluate mathematical expressions safely using AST.
+    
+    Supports: +, -, *, /, **, //, %, parentheses
+    Prevents arbitrary code execution.
+    """
+    try:
+        result = eval(compile(ast.parse(math_expression, mode="eval"), "", "eval"))
+        return str(result)
+    except SyntaxError:
+        return f"Error: Invalid expression '{math_expression}'"
+```
+
+### LangChain Tool Adapters (`infrastructure/outbound/tools/langchain_fwk/`)
+
+Framework-specific wrappers implementing `ToolPort`:
+
+**Age Calculator Adapter**:
+```python
+class LangChainAgeCalculatorToolAdapter(ToolPort):
+    """LangChain adapter for age calculator tool."""
+    
+    name = "age_calculator"
+    description = "Calculate age from birth date in yyyy-mm-dd format"
+    
+    def get_tool(self) -> BaseTool:
+        """Return LangChain StructuredTool."""
+        from learn_ai_agents.infrastructure.outbound.tools.base.age_calculator import (
+            calculate_age,
+        )
+        
+        return StructuredTool.from_function(
+            func=calculate_age,
+            name=self.name,
+            description=self.description,
+            args_schema=AgeCalculatorInput,  # Pydantic model
+        )
+```
+
+**Web Search Adapter**:
+```python
+class LangChainWebSearchToolAdapter(ToolPort):
+    """DuckDuckGo search integration."""
+    
+    name = "duckduckgo_results_json"
+    description = "Search the web using DuckDuckGo"
+    
+    def get_tool(self) -> BaseTool:
+        """Return DuckDuckGo search tool from langchain-community."""
+        return DuckDuckGoSearchResults()
+```
+
+### Adding Tools Agent (`infrastructure/outbound/agents/langchain_fwk/adding_tools/`)
+
+LangGraph agent with tool binding:
+
+**State** (`state.py`):
+```python
+class AgentState(TypedDict):
+    """State for adding tools agent."""
+    messages: Annotated[list[BaseMessage], add_messages]
+```
+
+**Agent** (`agent.py`):
+```python
+class AddingToolsLangchainAgent(BaseLangChainAgent):
+    """Agent with tool calling capabilities."""
+    
+    def __init__(
+        self,
+        *,
+        config: dict,
+        llms: dict[str, ChatModelProvider],
+        tools: dict[str, ToolPort],  # Tools injected via DI
+        chat_history_persistence: ChatHistoryStorePort | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
+    ):
+        self.checkpointer = checkpointer
+        super().__init__(
+            config=config,
+            llms=llms,
+            tools=tools,
+            chat_history_persistence=chat_history_persistence,
+        )
+    
+    def _build_graph(self):
+        """Build LangGraph with tool nodes."""
+        # Bind tools to LLM
+        llm_with_tools = self.llms["default"].get_model().bind_tools(
+            [tool.get_tool() for tool in self.tools.values()]
+        )
+        
+        # Build graph
+        graph = StateGraph(AgentState)
+        graph.add_node("chatbot", chatbot_node)  # LLM with tools
+        graph.add_node("tools", ToolNode(self.tools_by_name))  # Tool execution
+        
+        # Routing: if LLM calls tools → execute tools, else → end
+        graph.add_conditional_edges("chatbot", tools_condition)
+        graph.add_edge("tools", "chatbot")  # After tools, back to LLM
+        graph.add_edge(START, "chatbot")
+        
+        self.graph = graph.compile(checkpointer=self.checkpointer)
+```
+
+**Nodes** (`nodes.py`):
+```python
+async def chatbot_node(state: AgentState, config: RunnableConfig):
+    """Execute LLM with tool binding."""
+    llm_with_tools = config["configurable"]["llm_with_tools"]
+    response = await llm_with_tools.ainvoke(state["messages"])
+    return {"messages": [response]}
+
+def tools_condition(state: AgentState) -> Literal["tools", "__end__"]:
+    """Route to tools if LLM made tool calls."""
+    last_message = state["messages"][-1]
+    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        return "tools"
+    return "__end__"
+```
+
+### Flow: Tool-Enabled Conversation
+
+1. **Request arrives** → `POST /04_adding_tools/invoke`
+2. **Use case** loads conversation from MongoDB (if exists)
+3. **Agent**:
+   - Loads checkpointed state using `thread_id`
+   - Adds new user message to state
+   - Executes `chatbot_node` → LLM with bound tools
+   - **If LLM decides to use tools**:
+     - LLM returns tool calls with arguments
+     - Graph routes to `tools` node
+     - Tools execute and return results
+     - Graph routes back to `chatbot_node`
+     - LLM generates final response using tool results
+   - **If no tools needed**:
+     - LLM returns direct response
+     - Graph ends
+   - Saves checkpoint to MongoDB
+4. **Use case** saves messages (including tool calls/results) to chat history
+5. **Response** returned with tool-augmented answer
+
+### Benefits
+
+- **Separation of Concerns**: Business logic (base tools) separate from framework code
+- **Testability**: Base tools are pure Python functions (easy to unit test)
+- **Flexibility**: Swap LangChain for another framework by creating new adapters
+- **Dependency Injection**: Tools configured in settings.yaml, injected into agent
+- **Memory + Tools**: State persists across requests, tools can be used in multi-turn conversations
+
+---
+
+## 🧠 Memory System Architecture (from Branch 03)
 
 This branch implements a complete conversation memory system using MongoDB and LangGraph:
 
