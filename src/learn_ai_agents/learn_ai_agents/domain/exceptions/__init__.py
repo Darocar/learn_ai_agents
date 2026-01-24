@@ -1,17 +1,45 @@
-"""
-Domain Exceptions
+from ._base import ComponentException, AgentException, UseCaseException, BusinessRuleException
+from .domain import ResourceNotFoundException, InvalidRequestException, SourceContentFormatException
+from .agents import (
+    # Family/Hierarchical exceptions
+    AgentBuildingException,
+    AgentExecutionException,
+    # Specific exceptions
+    LLMCallException,
+)
+from .components import (
+    # Family/Hierarchical exceptions
+    ComponentBuildingException,
+    ComponentConnectionException,
+    ComponentOperationException,
+    # Specific exceptions
+    ComponentNotAvailableException,
+)
 
-Custom exceptions that represent business rule violations or domain errors.
-"""
+__all__ = [
+    # Base exception
+    "ComponentException",
+    "AgentException",
+    "UseCaseException",
+    "BusinessRuleException",
 
+    # Domain exceptions
+    "ResourceNotFoundException",
+    "InvalidRequestException",
+    "SourceContentFormatException",
 
-class DomainException(Exception):
-    """Base exception for all domain-related errors."""
+    # Agent exception families
+    "AgentBuildingException",
+    "AgentExecutionException",
+    
+    # Specific agent exceptions
+    "LLMCallException",
 
-    pass
+    # Component exception families
+    "ComponentBuildingException",
+    "ComponentConnectionException",
+    "ComponentOperationException",
 
-
-class ValidationError(DomainException):
-    """Raised when domain validation rules are violated."""
-
-    pass
+    # Specific component exceptions
+    "ComponentNotAvailableException",
+]
