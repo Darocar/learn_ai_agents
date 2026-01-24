@@ -1,21 +1,5 @@
-[project]
-name = "learn-ai-agents"
-version = "0.1.0"
-description = "This is didactic repository for learning how to create AI Agents following hexagonal architecture."
-readme = "README.md"
-classifiers = [
-    # TODO
-]
-license = {text = "MIT"}
-dependencies = [
-  "typer",
-  "fastapi[standard]",
-  "loguru",
-  "pydantic",
-  "pydantic-settings",
-  "ipykernel",
-]
-requires-python = ">= 3.10"
+[tool.uv.workspace]
+members = ["src/learn_ai_agents"]
 
 [dependency-groups]
 dev = [
@@ -23,12 +7,8 @@ dev = [
     "pre-commit",
     "pytest",
     "ruff",
+    "mypy",
 ]
-
-[tool.ty]
-# All rules are enabled as "error" by default; no need to specify unless overriding.
-# Example override: relax a rule for the entire project (uncomment if needed).
-# rules.TY015 = "warn"  # For invalid-argument-type, warn instead of error.
 
 [tool.ruff]
 line-length = 120
@@ -42,6 +22,6 @@ select = [
     "B",   # flake8-bugbear
     "UP",  # pyupgrade
 ]
-
-[tool.uv]
-package = true
+ignore = [
+    "B008",  # Allow function calls in argument defaults (needed for FastAPI Depends)
+]

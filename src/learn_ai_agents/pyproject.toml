@@ -13,10 +13,11 @@ dependencies = [
   "pydantic-settings==2.11.0",
   "ipykernel==7.0.1",
   "types-pyyaml>=6.0.12.20250915",
+  "uvicorn",
 ]
 
 [tool.uv]
-package = true
+dev-dependencies = []
 
 [build-system]
 requires = ["hatchling"]
@@ -37,3 +38,9 @@ select = [
   "B",   # flake8-bugbear
   "UP",  # pyupgrade
 ]
+ignore = [
+  "B008",  # Allow function calls in argument defaults (needed for FastAPI Depends)
+]
+
+[tool.mypy]
+ignore_missing_imports = true
