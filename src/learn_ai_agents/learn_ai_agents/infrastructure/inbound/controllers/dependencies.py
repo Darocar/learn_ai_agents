@@ -8,6 +8,9 @@ from fastapi import Request
 from learn_ai_agents.application.use_cases.agents.basic_answer.basic_answer import (
     BasicAnswerUseCase,
 )
+from learn_ai_agents.application.use_cases.agents.adding_memory.use_case import (
+    AddingMemoryUseCase,
+)
 from learn_ai_agents.application.use_cases.discovery.use_case import DiscoveryUseCase
 from learn_ai_agents.domain.services.agents.settings_resource_discovery import (
     SettingsResourceDiscovery,
@@ -27,6 +30,21 @@ def get_basic_answer_use_case(request: Request) -> BasicAnswerUseCase:
     """
     container = request.app.state.container
     return container.use_cases.get("basic_answer")
+
+
+def get_adding_memory_use_case(request: Request) -> AddingMemoryUseCase:
+    """Get the Adding Memory use case instance.
+
+    This dependency retrieves the AddingMemoryUseCase from the application container.
+
+    Args:
+        request: FastAPI request object containing the app state.
+
+    Returns:
+        AddingMemoryUseCase instance.
+    """
+    container = request.app.state.container
+    return container.use_cases.get("adding_memory")
 
 
 def get_discovery_use_case(request: Request) -> DiscoveryUseCase:
