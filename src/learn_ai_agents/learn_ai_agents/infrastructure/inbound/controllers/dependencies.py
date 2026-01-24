@@ -11,6 +11,9 @@ from learn_ai_agents.application.use_cases.agents.basic_answer.basic_answer impo
 from learn_ai_agents.application.use_cases.agents.adding_memory.use_case import (
     AddingMemoryUseCase,
 )
+from learn_ai_agents.application.use_cases.agents.adding_tools.use_case import (
+    AddingToolsUseCase,
+)
 from learn_ai_agents.application.use_cases.discovery.use_case import DiscoveryUseCase
 from learn_ai_agents.domain.services.agents.settings_resource_discovery import (
     SettingsResourceDiscovery,
@@ -45,6 +48,21 @@ def get_adding_memory_use_case(request: Request) -> AddingMemoryUseCase:
     """
     container = request.app.state.container
     return container.use_cases.get("adding_memory")
+
+
+def get_adding_tools_use_case(request: Request) -> AddingToolsUseCase:
+    """Get the Adding Tools use case instance.
+
+    This dependency retrieves the AddingToolsUseCase from the application container.
+
+    Args:
+        request: FastAPI request object containing the app state.
+
+    Returns:
+        AddingToolsUseCase instance.
+    """
+    container = request.app.state.container
+    return container.use_cases.get("adding_tools")
 
 
 def get_discovery_use_case(request: Request) -> DiscoveryUseCase:

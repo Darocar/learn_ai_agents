@@ -59,6 +59,27 @@ components:
           default:
             params: {}
 
+  tools:
+    langchain:
+      math_expression:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.tools.langchain_fwk.math_expressions.LangChainMathExpressionToolAdapter
+        instances:
+          default:
+            params: {}
+      duckduckgo_results_json:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.tools.langchain_fwk.web_search.LangChainWebSearchToolAdapter
+        instances:
+          default:
+            params: {}
+      age_calculator:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.tools.langchain_fwk.age_calculator.LangChainAgeCalculatorToolAdapter
+        instances:
+          default:
+            params: {}
+
 agents:
   langchain:
     basic_answer:
@@ -81,6 +102,22 @@ agents:
             default: llms.langchain.groq.default
           chat_history_persistence: chat_history_persistence.mongo.store.default
           checkpointer: checkpointer.mongo.saver.default
+    adding_tools:
+      info:
+        name: Adding Tools Agent
+        description: An agent that uses external tools like web search and math expression evaluation.
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.adding_tools.agent.AddingToolsLangchainAgent
+        components:
+          llms: 
+            default: llms.langchain.groq.default
+          tools:
+            duckduckgo_results_json: tools.langchain.duckduckgo_results_json.default
+            math_expression: tools.langchain.math_expression.default
+            age_calculator: tools.langchain.age_calculator.default
+          chat_history_persistence: chat_history_persistence.mongo.store.default
+          checkpointer: checkpointer.mongo.saver.default
+        config: {}
 
 use_cases:
   basic_answer:
@@ -106,4 +143,16 @@ use_cases:
       components:
         agents:
           agent: agents.langchain.adding_memory
+      config: {}
+  adding_tools:
+    info:
+      name: Adding Tools Use Case
+      description: A use case that provides answers using external tools like web search and math expression evaluation.
+      path_prefix: /04_adding_tools
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.adding_tools:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.adding_tools.use_case.AddingToolsUseCase
+      components:
+        agents:
+          agent: agents.langchain.adding_tools
       config: {}
