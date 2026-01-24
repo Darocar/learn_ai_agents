@@ -1,30 +1,39 @@
-# LEARN-AI-AGENTS — Branch `04_adding_tools_v2`
+# LEARN-AI-AGENTS — Branch `05_vector_database_v2`
 
-This branch adds **Tool Integration** with **LangGraph Tool Calling** for external capabilities.
+This branch adds **RAG (Retrieval-Augmented Generation)** with **Vector Database** and **Embeddings** for knowledge-enhanced agents.
 
 **What's new in this branch:**
-- ✅ **Tools System**: Complete hexagonal implementation for external tool integration
-  - Age calculator tool (calculate age from birth date)
-  - Math expression evaluator (safe mathematical calculations)
-  - Web search tool (DuckDuckGo integration)
-  - Framework-agnostic tool ports with LangChain adapters
-- ✅ **Adding Tools Agent**: LangGraph agent with tool binding and execution
-  - Automatic tool selection based on user query
-  - Tool call handling and result integration
-  - Memory and checkpointing with tools
-- ✅ **Tool Architecture**: Clean separation of concerns
-  - Base tools (pure Python business logic)
-  - LangChain tool adapters (framework-specific wrappers)
-  - Tool ports for dependency injection
+- ✅ **Vector Database**: Qdrant integration for semantic search
+  - QdrantVectorStoreRepository with COSINE similarity
+  - 384-dimensional embeddings (all-MiniLM-L6-v2)
+  - Efficient similarity search for RAG
+- ✅ **Embeddings**: Sentence transformers for text vectorization
+  - SentenceTransformerEmbedder adapter
+  - all-MiniLM-L6-v2 model (384 dims, fast, high quality)
+  - Document and query embedding support
+- ✅ **Content Indexer**: Complete RAG pipeline
+  - Source ingestion (Baldur's Gate 3 character data from web)
+  - Document splitting (hierarchical markdown splitting)
+  - Vectorization (embedding generation and storage)
+  - MongoDB repositories for documents and chunks
+- ✅ **Character Chat Agent**: RAG-powered conversational agent
+  - Vector search tool for retrieving relevant context
+  - LangGraph state management with checkpointing
+  - Character-specific knowledge from ingested documents
+- ✅ **Content Indexer Use Cases**: Three-step RAG workflow
+  - `/05_a_source_ingestion`: Fetch and store documents
+  - `/05_b_document_splitting`: Split documents into chunks
+  - `/05_c_vectorization`: Generate embeddings and store in Qdrant
+- **From Branch 04:**
+  - ✅ **Tools System**: External tool integration (web search, math, age calculator)
+  - ✅ **Adding Tools Agent**: LangGraph with tool calling
 - **From Branch 03:**
   - ✅ **Memory System**: MongoDB persistence and LangGraph state management
-  - ✅ **Database Infrastructure**: Async MongoDB adapters (Motor + Odmantic)
 - **From Branch 02:**
   - ✅ **Streamlit Web UI**: Interactive chat interface
   - ✅ **Discovery System**: System introspection
-  - ✅ **VS Code Launch Configurations**
 
-> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Groq** + **DuckDuckGo** + **Streamlit**
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Qdrant** + **Sentence Transformers** + **Groq** + **Streamlit**
 
 ---
 
@@ -32,22 +41,139 @@ This branch adds **Tool Integration** with **LangGraph Tool Calling** for extern
 
 ### New Features
 
-#### 1. Tools System with Hexagonal Architecture
-Complete tool integration following ports and adapters:
+#### 1. Vector Database Integration
+Complete Qdrant setup for semantic search:
 
-**Tool Ports** (`application/outbound_ports/agents/tools.py`):
-- Framework-independent tool interface
-- Each tool exposes `name`, `description`, and `get_tool()` method
+**QdrantVectorStoreRepository** (`infrastructure/outbound/content_indexer/repositories/vector_stores/`):
+- Store embeddings with metadata (chunk_id, document_id, character)
+- Similarity search with configurable top_k
+- COSINE distance for semantic similarity
+- 384-dimensional vector space (all-MiniLM-L6-v2)
 
-**Base Tools** (`infrastructure/outbound/tools/base/`):
-- **Age Calculator**: Pure Python function to calculate age from birth date
-  - Input: Birth date in yyyy-mm-dd format
-  - Output: Age in years
-  - Error handling for invalid dates and future dates
-- **Math Expression Evaluator**: Safe mathematical calculation using AST
-  - Supports: +, -, *, /, **, //, %, parentheses
-  - Prevents arbitrary code execution
-  - Examples: "2 + 2", "(10 * 5) / 2"
+**Configuration**:
+```yaml
+vector_store_repository:
+  qdrant:
+    store:
+      params:
+        host: ${QDRANT_HOST}  # Default: localhost
+        port: ${QDRANT_PORT}  # Default: 6333
+        vector_size: 384
+        distance: COSINE
+```
+
+#### 2. Embeddings System
+Sentence transformers for high-quality embeddings:
+
+**SentenceTransformerEmbedder** (`infrastructure/outbound/content_indexer/embedders/`):
+- Model: all-MiniLM-L6-v2 (384 dimensions)
+- Fast inference on CPU
+- Batch embedding support
+- Normalize vectors for COSINE similarity
+
+**Configuration**:
+```yaml
+embedders:
+  sentence_transformers:
+    all_minilm_l6_v2:
+      params:
+        model_name: all-MiniLM-L6-v2
+        device: cpu  # or 'cuda' for GPU
+```
+
+#### 3. Content Indexer - Complete RAG Pipeline
+Three-phase document processing:
+
+**Phase 1: Source Ingestion** (`/05_a_source_ingestion`):
+- Fetch character data from web (Baldur's Gate 3 wiki)
+- Store raw documents in MongoDB
+- BaldursGate3CharactersAdapter with timeout configuration
+
+**Phase 2: Document Splitting** (`/05_b_document_splitting`):
+- Hierarchical markdown splitting
+- Configurable chunk_size (1000) and overlap (200)
+- Preserve document structure and metadata
+- Store chunks in MongoDB
+
+**Phase 3: Vectorization** (`/05_c_vectorization`):
+- Generate embeddings for all chunks
+- Store vectors in Qdrant with metadata
+- Link chunks to documents for traceability
+
+**Repositories**:
+- MongoDocumentRepository: Full document storage
+- MongoChunkRepository: Chunk storage with document references
+- QdrantVectorStoreRepository: Vector embeddings with metadata
+
+#### 4. Character Chat Agent with RAG
+LangGraph agent enhanced with vector search:
+
+**CharacterChatLangchainAgent** (`infrastructure/outbound/agents/langchain_fwk/character_chat/`):
+- Vector search tool for context retrieval
+- Character-specific knowledge base
+- State management with conversation history
+- MongoDB checkpointing for persistence
+
+**Vector Search Tool**:
+```python
+# Automatically searches for relevant context
+# Returns top-k most similar chunks
+# Integrates context into agent responses
+```
+
+**Usage**:
+```bash
+curl -X POST http://localhost:8000/05_character_chat/ainvoke \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Tell me about Shadowheart",
+    "character_name": "shadowheart",
+    "config": {"conversation_id": "user123"}
+  }'
+```
+
+#### 5. RAG Workflow Example
+Complete end-to-end RAG setup:
+
+**Step 1: Ingest Documents**
+```bash
+curl -X POST http://localhost:8000/05_a_source_ingestion/execute \
+  -H "Content-Type: application/json" \
+  -d '{"source_name": "baldurs_gate_3_characters"}'
+# Fetches BG3 character data and stores in MongoDB
+```
+
+**Step 2: Split Documents**
+```bash
+curl -X POST http://localhost:8000/05_b_document_splitting/execute \
+  -H "Content-Type: application/json" \
+  -d '{"splitter_type": "markdown"}'
+# Splits documents into 1000-char chunks with 200-char overlap
+```
+
+**Step 3: Vectorize Chunks**
+```bash
+curl -X POST http://localhost:8000/05_c_vectorization/execute \
+  -H "Content-Type: application/json" \
+  -d '{"embedder_type": "sentence_transformers"}'
+# Generates embeddings and stores in Qdrant
+```
+
+**Step 4: Chat with Character**
+```bash
+curl -X POST http://localhost:8000/05_character_chat/ainvoke \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What are your abilities?",
+    "character_name": "shadowheart",
+    "config": {"conversation_id": "user123"}
+  }'
+# Agent retrieves relevant context and responds
+```
+
+### Previous Features (From Branches 02-04)
+
+#### Tools System (Branch 04)
 
 **LangChain Tool Adapters** (`infrastructure/outbound/tools/langchain_fwk/`):
 - **LangChainAgeCalculatorToolAdapter**: Wraps age calculator for LangChain

@@ -1,18 +1,20 @@
-# learn_ai_agents — Code Documentation (Branch 04_adding_tools_v2)
+# learn_ai_agents — Code Documentation (Branch 05_vector_database_v2)
 
 > This README explains the **code structure**, **component interactions**, and **implementation patterns** for this branch.
 
 ## 🆕 What's New in This Branch
 
 This branch adds:
-1. **Tools System**: Complete hexagonal implementation for external tool integration
-2. **Adding Tools Agent**: LangGraph StateGraph with tool binding and execution
-3. **Base Tools**: Pure Python business logic (age calculator, math evaluator)
-4. **LangChain Tool Adapters**: Framework-specific wrappers (web search included)
-5. **Memory System**: Complete MongoDB-backed conversation persistence (from Branch 03)
-6. **Database Infrastructure**: Async MongoDB adapters (from Branch 03)
-7. **Discovery System**: System introspection (from Branch 02)
-8. **Streamlit UI**: Web interface (from Branch 02)
+1. **Vector Database System**: Qdrant integration for semantic search
+2. **Embeddings System**: Sentence transformers for text vectorization (all-MiniLM-L6-v2)
+3. **Content Indexer**: Complete RAG pipeline (source ingestion, document splitting, vectorization)
+4. **Character Chat Agent**: RAG-powered conversational agent with vector search tool
+5. **Vector Search Tool**: LangChain adapter for Qdrant similarity search
+6. **MongoDB Repositories**: Document and chunk storage for RAG pipeline
+7. **Content Indexer Use Cases**: Three-step workflow (ingest, split, vectorize)
+8. **Tools System**: External tool integration (from Branch 04)
+9. **Memory System**: MongoDB-backed conversation persistence (from Branch 03)
+10. **Streamlit UI**: Web interface (from Branch 02)
 
 ---
 
