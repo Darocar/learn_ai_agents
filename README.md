@@ -1,17 +1,24 @@
-# LEARN-AI-AGENTS — Branch `02_adding_streamlit_ui_v2`
+# LEARN-AI-AGENTS — Branch `03_adding_memory_v2`
 
-This branch adds **Streamlit UI** and **Discovery System** for interactive exploration of the AI agents.
+This branch adds **Conversation Memory** with **MongoDB Persistence** and **LangGraph State Management**.
 
 **What's new in this branch:**
-- ✅ **Streamlit Web UI**: Interactive chat interface with use case selection
-- ✅ **Discovery System**: Complete hexagonal implementation for system introspection
-  - List all components (LLMs, databases, etc.)
-  - List all agents with their dependencies
-  - List all use cases with routing information
-- ✅ **VS Code Launch Configurations**: Debug both FastAPI and Streamlit
-- ✅ **Monorepo Structure**: Workspace with multiple packages (`learn_ai_agents`, `streamlit_ui`)
+- ✅ **Memory System**: Complete hexagonal implementation with MongoDB persistence
+  - LangGraph StateGraph for conversation flow
+  - MongoDB checkpointing for state persistence
+  - Chat history storage with conversation tracking
+  - Async MongoDB adapters (Motor + Odmantic)
+- ✅ **Adding Memory Agent**: LangGraph-based agent with memory capabilities
+- ✅ **Database Infrastructure**: MongoDB engine adapters and base repository patterns
+- ✅ **Enhanced Base Agent**: Support for chat history, tools, and tracing
+- ✅ **Eager Initialization**: Databases connect during container creation
+- **From Branch 02:**
+  - ✅ **Streamlit Web UI**: Interactive chat interface with use case selection
+  - ✅ **Discovery System**: Complete hexagonal implementation for system introspection
+  - ✅ **VS Code Launch Configurations**: Debug both FastAPI and Streamlit
+  - ✅ **Monorepo Structure**: Workspace with multiple packages
 
-> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **Groq** + **Streamlit**
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Groq** + **Streamlit**
 
 ---
 
@@ -19,7 +26,26 @@ This branch adds **Streamlit UI** and **Discovery System** for interactive explo
 
 ### New Features
 
-#### 1. Discovery System (Hexagonal Implementation)
+#### 1. Memory System with MongoDB Persistence
+Complete stateful conversation implementation:
+- **Database Adapters**:
+  - `MongoEngineAdapter`: Odmantic-based MongoDB engine
+  - `PyMongoAsyncAdapter`: Motor-based async MongoDB client
+- **Chat History**: 
+  - `MongoChatHistoryStore`: Persistent message storage
+  - `ConversationModel`: Odmantic model for conversations
+- **Checkpointers**:
+  - `MongoCheckpointerAdapter`: LangGraph checkpointing with MongoDB
+  - `MemoryCheckpointerAdapter`: In-memory checkpointing for testing
+- **Adding Memory Agent**: LangGraph StateGraph with:
+  - Conversation state management
+  - System prompt injection
+  - Message persistence
+  - Checkpointed state across requests
+- **Base Repository Pattern**: `BaseMongoModelRepository` for MongoDB operations
+- **Eager Database Initialization**: Databases connect during DI container creation
+
+#### 2. Discovery System (Hexagonal Implementation)
 Complete implementation following the architecture:
 - **Domain Models**: `Component`, `Agent`, `UseCase` entities
 - **Service**: `SettingsResourceDiscovery` reads configuration
@@ -27,7 +53,7 @@ Complete implementation following the architecture:
 - **API Endpoints**: `/discover/components`, `/discover/agents`, `/discover/use-cases`, `/discover/all`
 - **Purpose**: Runtime introspection of the system configuration
 
-#### 2. Streamlit UI
+#### 3. Streamlit UI
 Web interface for interacting with agents:
 - **Home Page**: System overview with discovery information
 - **Chat Page**: 
@@ -37,7 +63,7 @@ Web interface for interacting with agents:
   - Conversation management (ID tracking, clear/reset)
 - **Responsive Design**: Clean, minimal interface
 
-#### 3. Development Tools
+#### 4. Development Tools
 - **Launch Configurations**: `.vscode/launch.json` for debugging
   - `Run learn_ai_agents`: Debug FastAPI application
   - `Run streamlit`: Debug Streamlit UI
@@ -54,17 +80,21 @@ uv sync
 # 2. Set up environment variables
 # For learn_ai_agents
 cp .env.example .env
-# Add GROQ_API_KEY to .env
+# Add GROQ_API_KEY and MONGODB_URL to .env
+# Example: MONGODB_URL=mongodb://localhost:27017
 
 # For streamlit_ui
 cp src/streamlit_ui/.env.example src/streamlit_ui/.env
 # Configure AGENTS_API_BASE_URL (default: http://127.0.0.1:8000)
 
-# 3. Run FastAPI backend
+# 3. Start MongoDB (if using Docker)
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+
+# 4. Run FastAPI backend
 cd src/learn_ai_agents
 python -m learn_ai_agents
 
-# 4. Run Streamlit UI (in another terminal)
+# 5. Run Streamlit UI (in another terminal)
 cd src/streamlit_ui
 streamlit run streamlit_ui/Home_Page.py
 ```
@@ -76,9 +106,80 @@ streamlit run streamlit_ui/Home_Page.py
 
 ## 📁 Files Added in This Branch
 
-### Discovery System
+### Memory System
 ```
-domain/models/agents/
+# Database Infrastructure
+infrastructure/outbound/database/mongo/
+├── mongo_engine.py                        # MongoEngineAdapter (Odmantic)
+└── pymongo_async.py                       # PyMongoAsyncAdapter (Motor)
+
+# Chat History Persistence
+infrastructure/outbound/chat_history/mongo/
+├── repository.py                          # MongoChatHistoryStore
+└── models.py                              # ConversationModel (Odmantic)
+
+# Checkpointers
+infrastructure/outbound/checkpointers/
+├── mongo.py                               # MongoCheckpointerAdapter (LangGraph)
+└── memory.py                              # MemoryCheckpointerAdapter (in-memory)
+
+# Adding Memory Agent
+infrastructure/outbound/agents/langchain_fwk/adding_memory/
+├── agent.py                               # AddingMemoryLangGraphAgent
+├── nodes.py                               # chatbot_node
+├── prompts.py                             # ADDING_MEMORY_PROMPT_TEMPLATE
+└── state.py                               # State (TypedDict)
+
+# Application Layer
+application/
+├── outbound_ports/
+│   ├── agents/
+│   │   ├── chat_history.py                # ChatHistoryStorePort
+│   │   ├── tools.py                       # ToolPort
+│   │   └── tracing.py                     # AgentTracingPort
+│   └── database/
+│       └── __init__.py                    # DatabaseClient, DatabaseEngine
+└── use_cases/agents/adding_memory/
+    ├── use_case.py                        # AddingMemoryUseCase
+    └── mapper.py                          # Mappers for conversions
+
+# Domain Layer
+domain/
+├── models/agents/
+│   └── conversation.py                    # Conversation domain model
+└── exceptions/
+    ├── _base.py                           # BaseException hierarchy
+    ├── agents.py                          # Agent-specific exceptions
+    ├── components.py                      # Component exceptions
+    └── domain.py                          # Domain exceptions
+
+# Base Persistence
+infrastructure/outbound/base_persistence/
+└── mongo.py                               # BaseMongoModelRepository
+Memory-Enabled Chat Flow
+```
+POST /03_adding_memory/invoke
+  → AddingMemoryUseCase.ainvoke()
+  → Load conversation from MongoDB (if exists)
+  → AddingMemoryLangGraphAgent.ainvoke()
+    → LangGraph StateGraph execution:
+      1. Load checkpointed state (if exists)
+      2. Add new message to state
+      3. Execute chatbot_node (with LLM)
+      4. Save checkpoint to MongoDB
+  → Save messages to chat history
+  → Return AIMessage response
+```
+
+### Discovery Flow
+```
+GET /discover/use-cases 
+  → DiscoveryUseCase.discover_use_cases() 
+  → SettingsResourceDiscovery.list_use_cases()
+  → Returns UseCasesResponseDTO
+```
+
+### Basic Chat Flow (Stateless)/agents/
 └── discovery.py                           # Component, Agent, UseCase models
 
 application/
@@ -96,7 +197,7 @@ infrastructure/inbound/controllers/discovery/
 └── discovery.py                           # Discovery API router
 ```
 
-### Streamlit UI
+### Streamlit UI (from Branch 02)
 ```
 src/streamlit_ui/
 ├── .env.example                           # Environment template

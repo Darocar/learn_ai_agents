@@ -1,13 +1,16 @@
-# learn_ai_agents — Code Documentation (Branch 02_adding_streamlit_ui_v2)
+# learn_ai_agents — Code Documentation (Branch 03_adding_memory_v2)
 
 > This README explains the **code structure**, **component interactions**, and **implementation patterns** for this branch.
 
 ## 🆕 What's New in This Branch
 
 This branch adds:
-1. **Discovery System**: Complete hexagonal implementation for system introspection
-2. **Streamlit UI**: Web interface for interactive agent exploration
-3. **Enhanced Container System**: Full dependency injection with lazy loading
+1. **Memory System**: Complete MongoDB-backed conversation persistence with LangGraph
+2. **Database Infrastructure**: Async MongoDB adapters (Motor + Odmantic)
+3. **Adding Memory Agent**: LangGraph StateGraph with checkpointing
+4. **Enhanced Base Agent**: Support for chat history, tools, and tracing
+5. **Discovery System**: Complete hexagonal implementation for system introspection (from Branch 02)
+6. **Streamlit UI**: Web interface for interactive agent exploration (from Branch 02)
 
 ---
 
@@ -46,6 +49,166 @@ This codebase follows **Ports and Adapters** (Hexagonal Architecture):
 2. **Application Defines Interfaces**: Ports are protocols (abstract interfaces)
 3. **Infrastructure Implements**: Adapters satisfy port contracts
 4. **Dependencies Point Inward**: Infrastructure → Application → Domain
+
+---
+
+## 🧠 Memory System Architecture
+
+This branch implements a complete conversation memory system using MongoDB and LangGraph:
+
+### Components
+
+#### 1. Database Adapters (`infrastructure/outbound/database/mongo/`)
+Two complementary MongoDB adapters:
+
+**MongoEngineAdapter** (Odmantic-based):
+```python
+class MongoEngineAdapter(DatabaseEngine):
+    """MongoDB engine using Odmantic for ODM operations."""
+    
+    async def connect(self):
+        """Initialize async MongoDB connection."""
+        self.engine = AIOEngine(motor_client=..., database=...)
+    
+    def get_engine(self) -> AIOEngine:
+        """Return Odmantic engine for model operations."""
+        return self.engine
+```
+
+**PyMongoAsyncAdapter** (Motor-based):
+```python
+class PyMongoAsyncAdapter(DatabaseClient):
+    """MongoDB client using Motor for direct async operations."""
+    
+    async def connect(self):
+        """Initialize Motor client."""
+        self.client = AsyncIOMotorClient(...)
+    
+    def get_client(self) -> AsyncIOMotorClient:
+        """Return Motor client for LangGraph checkpointing."""
+        return self.client
+```
+
+#### 2. Chat History Persistence (`infrastructure/outbound/chat_history/mongo/`)
+
+**ConversationModel** (Odmantic):
+```python
+class ConversationModel(Model):
+    """Odmantic model for storing conversations."""
+    conversation_id: str
+    messages: list[MessageModel]
+    created_at: datetime
+    updated_at: datetime
+```
+
+**MongoChatHistoryStore**:
+```python
+class MongoChatHistoryStore(ChatHistoryStorePort):
+    """MongoDB implementation of chat history storage."""
+    
+    async def save_message(self, conversation_id: str, message: Message):
+        """Save a message to conversation history."""
+        
+    async def load_conversation(self, conversation_id: str) -> Conversation | None:
+        """Load full conversation by ID."""
+```
+
+#### 3. Checkpointers (`infrastructure/outbound/checkpointers/`)
+
+**MongoCheckpointerAdapter**:
+```python
+class MongoCheckpointerAdapter:
+    """LangGraph checkpointing with MongoDB persistence."""
+    
+    @staticmethod
+    def build(**kwargs) -> BaseCheckpointSaver:
+        database = kwargs["database"]  # PyMongoAsyncAdapter
+        checkpointer = AsyncMongoDBSaver(
+            client=database.get_client(),
+            db_name=kwargs["db_name"],
+            checkpoint_collection_name=kwargs["checkpoint_collection_name"]
+        )
+        return checkpointer
+```
+
+**MemoryCheckpointerAdapter**:
+```python
+class MemoryCheckpointerAdapter:
+    """In-memory checkpointing for testing/development."""
+    
+    @staticmethod
+    def build(**kwargs) -> BaseCheckpointSaver:
+        return MemorySaver()
+```
+
+#### 4. Adding Memory Agent (`infrastructure/outbound/agents/langchain_fwk/adding_memory/`)
+
+LangGraph StateGraph-based agent:
+
+**State** (`state.py`):
+```python
+class State(TypedDict):
+    """Graph state for adding memory agent."""
+    messages: Annotated[list[BaseMessage], add_messages]
+```
+
+**Agent** (`agent.py`):
+```python
+class AddingMemoryLangGraphAgent(BaseLangChainAgent):
+    """Conversational agent with memory using LangGraph."""
+    
+    def __init__(
+        self,
+        *,
+        config: dict,
+        llms: dict[str, ChatModelProvider],
+        checkpointer: BaseCheckpointSaver | None = None,
+        chat_history_persistence: ChatHistoryStorePort | None = None,
+    ):
+        self.checkpointer = checkpointer
+        super().__init__(config=config, llms=llms, 
+                        chat_history_persistence=chat_history_persistence)
+    
+    def _build_graph(self):
+        """Build LangGraph StateGraph with checkpointing."""
+        graph = StateGraph(State)
+        graph.add_node("chatbot", chatbot_node)
+        graph.add_edge(START, "chatbot")
+        graph.add_edge("chatbot", END)
+        
+        self.graph = graph.compile(checkpointer=self.checkpointer)
+```
+
+**Node** (`nodes.py`):
+```python
+async def chatbot_node(state: State, config: RunnableConfig) -> dict[str, list[BaseMessage]]:
+    """Execute LLM call with conversation state."""
+    llm = config["configurable"]["llm"]
+    response = await llm.ainvoke(state["messages"])
+    return {"messages": [response]}
+```
+
+### Flow: Memory-Enabled Conversation
+
+1. **Request arrives** → `POST /03_adding_memory/invoke`
+2. **Use case** loads conversation from MongoDB (if `conversation_id` provided)
+3. **Agent**:
+   - Loads checkpointed state from MongoDB using `thread_id`
+   - Adds system prompt (if first interaction)
+   - Adds new user message to state
+   - Executes graph → LLM generates response
+   - Saves checkpoint back to MongoDB
+4. **Use case** saves both user and AI messages to chat history
+5. **Response** returned with updated `conversation_id`
+
+### Benefits
+
+- **Stateful conversations**: Context persists across requests
+- **Dual persistence**: 
+  - LangGraph checkpoints → State snapshots
+  - Chat history → Full conversation logs
+- **Pluggable checkpointers**: Swap MongoDB ↔ Memory for testing
+- **Hexagonal design**: All MongoDB logic isolated in infrastructure
 
 ---
 
