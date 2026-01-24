@@ -1,6 +1,13 @@
-# learn_ai_agents — Code Documentation
+# learn_ai_agents — Code Documentation (Branch 02_adding_streamlit_ui_v2)
 
 > This README explains the **code structure**, **component interactions**, and **implementation patterns** for this branch.
+
+## 🆕 What's New in This Branch
+
+This branch adds:
+1. **Discovery System**: Complete hexagonal implementation for system introspection
+2. **Streamlit UI**: Web interface for interactive agent exploration
+3. **Enhanced Container System**: Full dependency injection with lazy loading
 
 ---
 
@@ -912,6 +919,7 @@ The container automatically:
 - [Dependency Inversion Principle](https://en.wikipedia.org/wiki/Dependency_inversion_principle)
 - [Python Protocols](https://peps.python.org/pep-0544/)
 - [FastAPI Dependency Injection](https://fastapi.tiangolo.com/tutorial/dependencies/)
+- [Streamlit Documentation](https://docs.streamlit.io/)
 
 ---
 
@@ -922,9 +930,24 @@ The container automatically:
 3. **Adapters are swappable**: Infrastructure implements ports
 4. **Bootstrap wires it all**: DI happens once at startup
 5. **Test each layer**: Unit → Integration → E2E
+6. **Discovery enables introspection**: Runtime visibility into system configuration
+7. **Containers manage lifecycle**: Lazy loading, proper initialization, clean shutdown
 
 This architecture makes the code:
 - ✅ Testable (mock any dependency)
 - ✅ Maintainable (clear separation)
 - ✅ Flexible (swap implementations)
 - ✅ Scalable (add features without breaking existing code)
+- ✅ Observable (discovery system provides runtime visibility)
+- ✅ User-friendly (Streamlit UI for exploration and testing)
+
+---
+
+## 🚀 Next Steps (Branch 03)
+
+The next branch will add:
+- **Conversation Memory**: MongoDB-based persistence
+- **Agent with Memory**: LangGraph agent using checkpointing
+- **New Use Case**: `adding_memory` demonstrating stateful conversations
+- **Chat History**: Database adapters and repositories
+- **Checkpointers**: MongoDB and in-memory checkpointing implementations

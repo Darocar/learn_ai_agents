@@ -1,81 +1,144 @@
-# LEARN-AI-AGENTS — Branch `01_create_first_use_case_v2`
+# LEARN-AI-AGENTS — Branch `02_adding_streamlit_ui_v2`
 
-This branch implements **the first working use case**: a simple AI chat agent using Hexagonal Architecture.
+This branch adds **Streamlit UI** and **Discovery System** for interactive exploration of the AI agents.
 
 **What's new in this branch:**
-- ✅ Domain models for messages and conversations
-- ✅ Application layer: DTOs, ports, and use case
-- ✅ Infrastructure: LLM adapter (Groq), Agent engine (LangChain)
-- ✅ FastAPI endpoint for chat
+- ✅ **Streamlit Web UI**: Interactive chat interface with use case selection
+- ✅ **Discovery System**: Complete hexagonal implementation for system introspection
+  - List all components (LLMs, databases, etc.)
+  - List all agents with their dependencies
+  - List all use cases with routing information
+- ✅ **VS Code Launch Configurations**: Debug both FastAPI and Streamlit
+- ✅ **Monorepo Structure**: Workspace with multiple packages (`learn_ai_agents`, `streamlit_ui`)
 
-> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **Groq**
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **Groq** + **Streamlit**
 
 ---
 
 ## 🎯 What This Branch Demonstrates
 
-Complete flow of implementing a feature in Hexagonal Architecture:
+### New Features
 
-### 1. Domain Layer (Pure Business Logic)
-- `Message` and `Conversation` models
-- `AgentConfig` value object
-- Zero framework dependencies
+#### 1. Discovery System (Hexagonal Implementation)
+Complete implementation following the architecture:
+- **Domain Models**: `Component`, `Agent`, `UseCase` entities
+- **Service**: `SettingsResourceDiscovery` reads configuration
+- **Use Case**: `DiscoveryUseCase` orchestrates discovery operations
+- **API Endpoints**: `/discover/components`, `/discover/agents`, `/discover/use-cases`, `/discover/all`
+- **Purpose**: Runtime introspection of the system configuration
 
-### 2. Application Layer (Use Case Orchestration)
-- **DTOs**: `BasicAnswerInputDto`, `BasicAnswerOutputDto`
-- **Inbound Port**: `BasicAnswerInboundPort` protocol
-- **Outbound Ports**: `LlmModelPort`, `AgentEnginePort` protocols
-- **Use Case**: `BasicAnswerUseCase` orchestrates chat
-- **Mapper**: Domain ↔ DTO conversion
+#### 2. Streamlit UI
+Web interface for interacting with agents:
+- **Home Page**: System overview with discovery information
+- **Chat Page**: 
+  - Dynamic use case selection from discovery API
+  - Real-time agent information display
+  - Invoke and Stream modes
+  - Conversation management (ID tracking, clear/reset)
+- **Responsive Design**: Clean, minimal interface
 
-### 3. Infrastructure Layer (Not Yet Implemented)
-- LLM Adapter (Groq + LangChain)
-- Agent Engine (LangChain agent)
-- FastAPI controller
-- Bootstrap container
-
----
-
-## 🔄 Request Flow (When Complete)
-
-```
-POST /chat → Controller → BasicAnswerUseCase → AgentEngine → Groq LLM → Response
-```
+#### 3. Development Tools
+- **Launch Configurations**: `.vscode/launch.json` for debugging
+  - `Run learn_ai_agents`: Debug FastAPI application
+  - `Run streamlit`: Debug Streamlit UI
+- **Environment Setup**: Separate `.env` files for each package
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# Sync dependencies
+# 1. Sync all workspace dependencies
 uv sync
 
-# Set environment variables
+# 2. Set up environment variables
+# For learn_ai_agents
 cp .env.example .env
 # Add GROQ_API_KEY to .env
 
-# Run (when infrastructure is implemented)
+# For streamlit_ui
+cp src/streamlit_ui/.env.example src/streamlit_ui/.env
+# Configure AGENTS_API_BASE_URL (default: http://127.0.0.1:8000)
+
+# 3. Run FastAPI backend
+cd src/learn_ai_agents
 python -m learn_ai_agents
+
+# 4. Run Streamlit UI (in another terminal)
+cd src/streamlit_ui
+streamlit run streamlit_ui/Home_Page.py
 ```
+
+**Or use VS Code debugger:**
+- Press F5 and select "Run learn_ai_agents" or "Run streamlit"
 
 ---
 
 ## 📁 Files Added in This Branch
 
+### Discovery System
 ```
-domain/models/
-├── config.py          # AgentConfig
-└── messages.py        # Message, Conversation, Role
+domain/models/agents/
+└── discovery.py                           # Component, Agent, UseCase models
 
 application/
-├── dtos/basic_answer.py              # Input/Output DTOs
-├── inbound_ports/basic_answer.py     # IBasicAnswerUseCase
-├── outbound_ports/
-│   ├── agent_engine.py               # IAgentEngine
-│   └── llm_model.py                  # ILLMModel
-└── use_cases/basic_answer/
-    ├── basic_answer.py               # BasicAnswerUseCase
-    └── mapper.py                     # Mapper
+├── dtos/discovery/
+│   └── discovery.py                       # Discovery DTOs
+└── use_cases/discovery/
+    ├── __init__.py
+    └── use_case.py                        # DiscoveryUseCase
+
+domain/services/agents/
+└── settings_resource_discovery.py        # SettingsResourceDiscovery service
+
+infrastructure/inbound/controllers/discovery/
+├── __init__.py
+└── discovery.py                           # Discovery API router
+```
+
+### Streamlit UI
+```
+src/streamlit_ui/
+├── .env.example                           # Environment template
+├── pyproject.toml                         # Streamlit dependencies
+├── README.md                              # UI-specific documentation
+└── streamlit_ui/
+    ├── __init__.py
+    ├── Home_Page.py                       # Landing page
+    ├── pages/
+    │   ├── 1_Chat.py                      # Chat interface
+    │   ├── 2_Conversation_History.py      # (MongoDB-based, disabled for now)
+    │   └── 3_Character_Chat.py            # (MongoDB-based, disabled for now)
+    └── utils/
+        ├── __init__.py
+        └── mongo_client.py                # MongoDB utilities (for future use)
+```
+
+### Configuration & Tools
+```
+.vscode/
+└── launch.json                            # VS Code debug configurations
+
+pyproject.toml                             # Updated with streamlit_ui workspace member
+```
+
+---
+
+## 🔄 Request Flow
+
+### Discovery Flow
+```
+GET /discover/use-cases 
+  → DiscoveryUseCase.discover_use_cases() 
+  → SettingsResourceDiscovery.list_use_cases()
+  → Returns UseCasesResponseDTO
+```
+
+### Chat Flow
+```
+Streamlit UI → GET /discover/use-cases → Display use case selector
+User selects use case + types message
+Streamlit UI → POST /{use_case_path}/invoke → BasicAnswerUseCase → Agent → LLM → Response
 ```
 
 ---
