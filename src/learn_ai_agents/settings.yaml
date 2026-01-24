@@ -1,0 +1,5 @@
+# Components configuration will be built incrementally
+# This file defines the dependency injection setup for the application
+
+components:
+  # Add your components here as you build them
