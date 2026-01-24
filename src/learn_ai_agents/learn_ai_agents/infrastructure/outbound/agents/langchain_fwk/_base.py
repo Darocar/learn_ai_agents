@@ -5,12 +5,15 @@ This module provides the abstract base class for all LangChain agent implementat
 
 from abc import abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Optional, Dict, Any
 
 from langchain_core.runnables import Runnable
-
+from langgraph.graph.state import CompiledStateGraph
 from learn_ai_agents.application.outbound_ports.agents.agent_engine import AgentEngine
+from learn_ai_agents.application.outbound_ports.agents.chat_history import ChatHistoryStorePort
 from learn_ai_agents.application.outbound_ports.agents.llm_model import ChatModelProvider
+from learn_ai_agents.application.outbound_ports.agents.tools import ToolPort
+from learn_ai_agents.application.outbound_ports.agents.tracing import AgentTracingPort
 from learn_ai_agents.domain.models.agents.config import Config
 from learn_ai_agents.domain.models.agents.messages import ChunkDelta, Message
 from learn_ai_agents.logging import get_logger
@@ -26,17 +29,22 @@ class BaseLangChainAgent(AgentEngine):
     lifecycle methods that concrete agents must implement.
 
     Attributes:
+        graph: Optional LangGraph compiled state graph for complex agents.
         chain: Optional LangChain runnable chain for simple agents.
         llms: Dictionary of LLM providers keyed by alias.
     """
 
+    graph: CompiledStateGraph[Any, Any, Any, Any] | None
     chain: Runnable | None
 
     def __init__(
         self,
         *,
-        config: dict,
-        llms: dict[str, ChatModelProvider],
+        config: Dict,
+        llms: Dict[str, ChatModelProvider],
+        chat_history_persistence: Optional[ChatHistoryStorePort] = None,
+        tools: Optional[Dict[str, ToolPort]] = None,
+        tracer: Optional[AgentTracingPort] = None,
     ) -> None:
         """Initialize the agent with configuration and LLM providers.
 
@@ -46,13 +54,17 @@ class BaseLangChainAgent(AgentEngine):
         """
         logger.debug(f"Initializing {self.__class__.__name__}")
         self.llms = llms
+        self.tools = tools
+        self.tools_by_name = {name: tool.get_tool() for name, tool in tools.items()} if tools else {}
+        self.chat_history_persistence = chat_history_persistence
+        self.tracer = tracer
         self._load_config(config)
         self._configure_nodes()
         self._build_graph()
         logger.debug(f"{self.__class__.__name__} initialized successfully")
 
     @abstractmethod
-    def _load_config(self, config: dict) -> None:
+    def _load_config(self, config: Dict) -> None:
         """Load agent-specific configuration.
 
         Args:
@@ -67,7 +79,6 @@ class BaseLangChainAgent(AgentEngine):
         Override this to set up graph nodes, edges, and state.
         """
         ...
-
 
     @abstractmethod
     def _build_graph(self) -> None:
