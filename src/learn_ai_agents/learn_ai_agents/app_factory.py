@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from learn_ai_agents.infrastructure.bootstrap.app_container import AppContainer
+from learn_ai_agents.infrastructure.inbound.controllers import basic_answer
 from learn_ai_agents.logging import get_logger
 from learn_ai_agents.settings import AppSettings
 
@@ -32,6 +34,9 @@ def create_app(app_settings: AppSettings) -> FastAPI:
         Configured FastAPI application instance.
     """
 
+    # Build dependency injection container
+    container = AppContainer(settings=app_settings)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Manage application lifecycle (startup and shutdown).
@@ -48,11 +53,8 @@ def create_app(app_settings: AppSettings) -> FastAPI:
         """
         logger.info("🚀 Starting Learn AI Agents application...")
 
-        # TODO: Initialize resources here in future branches
-        # - Build dependency injection container
-        # - Connect to databases
-        # - Initialize LLM clients
-        # - Set up tracing
+        # Initialize dependency injection
+        app.state.container = container
 
         logger.info("✅ Application startup complete")
 
@@ -76,10 +78,8 @@ def create_app(app_settings: AppSettings) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # TODO: Register routers here in future branches
-    # Example:
-    # from learn_ai_agents.infrastructure.inbound.api import health_router
-    # app.include_router(health_router)
+    # Register routers
+    app.include_router(basic_answer.router)
 
     logger.info("✅ Application created successfully")
 

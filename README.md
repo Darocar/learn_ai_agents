@@ -1,18 +1,127 @@
-# LEARN-AI-AGENTS — Branch `00_folder_structure`
+# LEARN-AI-AGENTS — Branch `01_create_first_use_case_v2`
 
-This branch sets up a **teaching repository** for building LLM‑powered agents using **Hexagonal (Ports & Adapters)**. There’s deliberately **no business logic yet**—just a clean, future‑proof layout, wiring spots, and configuration stubs so the next branches can add features without fighting the structure.
+This branch implements **the first working use case**: a simple AI chat agent using Hexagonal Architecture.
 
-> Stack: **Python 3.12** + **uv** for environments, dependencies, and scripts; **FastAPI** will be the first inbound adapter.
+**What's new in this branch:**
+- ✅ Domain models for messages and conversations
+- ✅ Application layer: DTOs, ports, and use case
+- ✅ Infrastructure: LLM adapter (Groq), Agent engine (LangChain)
+- ✅ FastAPI endpoint for chat
+
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **Groq**
 
 ---
 
-## Why this layout?
+## 🎯 What This Branch Demonstrates
 
-We follow **Hexagonal Architecture** so the *application core* is technology‑agnostic. The core talks to the outside world through **ports** (interfaces); framework‑ or vendor‑specific **adapters** plug into those ports at the edges. This makes it easy to swap UI, LLM providers, databases, tracers, etc., without touching the core logic.
+Complete flow of implementing a feature in Hexagonal Architecture:
+
+### 1. Domain Layer (Pure Business Logic)
+- `Message` and `Conversation` models
+- `AgentConfig` value object
+- Zero framework dependencies
+
+### 2. Application Layer (Use Case Orchestration)
+- **DTOs**: `BasicAnswerInputDto`, `BasicAnswerOutputDto`
+- **Inbound Port**: `BasicAnswerInboundPort` protocol
+- **Outbound Ports**: `LlmModelPort`, `AgentEnginePort` protocols
+- **Use Case**: `BasicAnswerUseCase` orchestrates chat
+- **Mapper**: Domain ↔ DTO conversion
+
+### 3. Infrastructure Layer (Not Yet Implemented)
+- LLM Adapter (Groq + LangChain)
+- Agent Engine (LangChain agent)
+- FastAPI controller
+- Bootstrap container
 
 ---
 
-## Repository map
+## 🔄 Request Flow (When Complete)
+
+```
+POST /chat → Controller → BasicAnswerUseCase → AgentEngine → Groq LLM → Response
+```
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# Sync dependencies
+uv sync
+
+# Set environment variables
+cp .env.example .env
+# Add GROQ_API_KEY to .env
+
+# Run (when infrastructure is implemented)
+python -m learn_ai_agents
+```
+
+---
+
+## 📁 Files Added in This Branch
+
+```
+domain/models/
+├── config.py          # AgentConfig
+└── messages.py        # Message, Conversation, Role
+
+application/
+├── dtos/basic_answer.py              # Input/Output DTOs
+├── inbound_ports/basic_answer.py     # IBasicAnswerUseCase
+├── outbound_ports/
+│   ├── agent_engine.py               # IAgentEngine
+│   └── llm_model.py                  # ILLMModel
+└── use_cases/basic_answer/
+    ├── basic_answer.py               # BasicAnswerUseCase
+    └── mapper.py                     # Mapper
+```
+
+---
+
+## Hexagonal Architecture Overview
+
+```
+domain/             # Pure business logic (no frameworks)
+├── models/         # Entities & value objects
+└── services/       # Domain policies
+
+application/        # Use case orchestration
+├── dtos/           # Input/output data structures
+├── inbound_ports/  # Interfaces exposed to controllers
+├── outbound_ports/ # Interfaces for external dependencies
+└── use_cases/      # Business workflows
+
+infrastructure/     # Framework & vendor code
+├── inbound/        # Controllers (FastAPI)
+├── outbound/       # Adapters (LLM, DB, etc.)
+└── bootstrap/      # Dependency injection
+```
+
+See [src/learn_ai_agents/README.md](src/learn_ai_agents/README.md) for detailed code documentation.
+
+---
+
+## Development Commands
+
+```bash
+# Install dependencies
+uv sync
+
+# Code quality
+make format     # Auto-fix formatting
+make lint       # Check code quality
+make type-check # Run mypy
+make verify     # Run all checks
+
+# Run application (when complete)
+python -m learn_ai_agents
+```
+
+---
+
+## Full Repository Structure
 
 ```
 .
