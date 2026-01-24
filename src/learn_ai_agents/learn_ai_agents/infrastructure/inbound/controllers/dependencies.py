@@ -14,6 +14,18 @@ from learn_ai_agents.application.use_cases.agents.adding_memory.use_case import 
 from learn_ai_agents.application.use_cases.agents.adding_tools.use_case import (
     AddingToolsUseCase,
 )
+from learn_ai_agents.application.use_cases.agents.character_chat.use_case import (
+    CharacterChatUseCase,
+)
+from learn_ai_agents.application.use_cases.content_indexer.source_ingestion import (
+    SourceIngestionUseCase,
+)
+from learn_ai_agents.application.use_cases.content_indexer.document_splitting.use_case import (
+    DocumentSplittingUseCase,
+)
+from learn_ai_agents.application.use_cases.content_indexer.vectorization.use_case import (
+    VectorizationUseCase,
+)
 from learn_ai_agents.application.use_cases.discovery.use_case import DiscoveryUseCase
 from learn_ai_agents.domain.services.agents.settings_resource_discovery import (
     SettingsResourceDiscovery,
@@ -63,6 +75,39 @@ def get_adding_tools_use_case(request: Request) -> AddingToolsUseCase:
     """
     container = request.app.state.container
     return container.use_cases.get("adding_tools")
+
+
+def get_character_chat_use_case(request: Request) -> CharacterChatUseCase:
+    """Get the Character Chat use case instance.
+
+    This dependency retrieves the CharacterChatUseCase from the application container.
+
+    Args:
+        request: FastAPI request object containing the app state.
+
+    Returns:
+        CharacterChatUseCase instance.
+    """
+    container = request.app.state.container
+    return container.use_cases.get("character_chat")
+
+
+def get_source_ingestion_use_case(request: Request) -> SourceIngestionUseCase:
+    """Get the Source Ingestion use case instance."""
+    container = request.app.state.container
+    return container.use_cases.get("source_ingestion")
+
+
+def get_document_splitting_use_case(request: Request) -> DocumentSplittingUseCase:
+    """Get the Document Splitting use case instance."""
+    container = request.app.state.container
+    return container.use_cases.get("document_splitting")
+
+
+def get_vectorization_use_case(request: Request) -> VectorizationUseCase:
+    """Get the Vectorization use case instance."""
+    container = request.app.state.container
+    return container.use_cases.get("vectorization")
 
 
 def get_discovery_use_case(request: Request) -> DiscoveryUseCase:
