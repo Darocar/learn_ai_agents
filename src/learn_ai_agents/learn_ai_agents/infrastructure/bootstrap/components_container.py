@@ -40,15 +40,40 @@ class ComponentsContainer:
 
     @classmethod
     async def create(cls, settings: AppSettings) -> Self:
-        """Create a new components container.
+        """Create a new components container and eagerly initialize databases.
+
+        Database components are created eagerly on container initialization,
+        so they're ready for dependent components (repositories, checkpointers).
 
         Args:
             settings: The application settings to use for component resolution.
 
         Returns:
-            Initialized ComponentsContainer.
+            Initialized ComponentsContainer with databases ready.
         """
         container = cls(settings=settings, _cache={}, _lock=RLock())
+
+        # Eagerly initialize all database components
+        if hasattr(settings, "components") and "databases" in settings.components:
+            logger.info("Eagerly initializing database components...")
+            databases_config = settings.components["databases"]
+
+            # Iterate over database types (e.g., 'mongo')
+            for db_type, db_providers in databases_config.items():
+                # Iterate over providers (e.g., 'engine')
+                for provider_name, provider_family in db_providers.items():
+                    # Iterate over instances (e.g., 'default')
+                    for instance_name in provider_family.instances.keys():
+                        ref = f"databases.{db_type}.{provider_name}.{instance_name}"
+                        logger.info(f"Initializing database: {ref}")
+                        db_instance = container.get(ref)
+
+                        # Call connect() if the database supports it
+                        if hasattr(db_instance, "connect") and callable(db_instance.connect):
+                            logger.info(f"Connecting database: {ref}")
+                            await db_instance.connect()
+                            logger.info(f"✅ Database connected: {ref}")
+
         return container
 
     def get(self, ref: str) -> Any:
