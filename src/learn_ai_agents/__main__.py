@@ -7,7 +7,7 @@ import logging
 
 import uvicorn
 
-from learn_ai_agents.logging import setup_logging, get_logger
+from learn_ai_agents.logging import get_logger, setup_logging
 
 # Initialize logging first thing
 setup_logging(level=logging.INFO, use_colors=True)

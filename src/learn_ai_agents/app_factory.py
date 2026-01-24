@@ -47,25 +47,25 @@ def create_app(app_settings: AppSettings) -> FastAPI:
             Control during the application's running state.
         """
         logger.info("🚀 Starting Learn AI Agents application...")
-        
+
         # TODO: Initialize resources here in future branches
         # - Build dependency injection container
         # - Connect to databases
         # - Initialize LLM clients
         # - Set up tracing
-        
+
         logger.info("✅ Application startup complete")
 
         try:
             yield
         finally:
             logger.info("🛑 Shutting down application...")
-            
+
             # TODO: Clean up resources here in future branches
             # - Close database connections
             # - Shutdown LLM clients
             # - Flush tracing buffers
-            
+
             logger.info("✅ Application shutdown complete")
 
     # Create FastAPI app with lifecycle management
@@ -84,4 +84,3 @@ def create_app(app_settings: AppSettings) -> FastAPI:
     logger.info("✅ Application created successfully")
 
     return app
-

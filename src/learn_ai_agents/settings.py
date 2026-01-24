@@ -28,18 +28,13 @@ from __future__ import annotations
 import os
 import re
 from collections import ChainMap
-from contextlib import contextmanager
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, SecretStr
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    SettingsConfigDict,
-    DotEnvSettingsSource
-)
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, PydanticBaseSettingsSource, SettingsConfigDict
 
 from learn_ai_agents.logging import get_logger
 
@@ -98,7 +93,7 @@ class ComponentConstructor(BaseModel):
     """
 
     module_class: str
-    api_key: Optional[SecretStr] = None
+    api_key: SecretStr | None = None
 
 
 class ComponentInstance(BaseModel):
@@ -108,7 +103,7 @@ class ComponentInstance(BaseModel):
         params: Parameters to pass to the component constructor.
     """
 
-    params: Dict[str, Any]
+    params: dict[str, Any]
 
 
 class ProviderFamily(BaseModel):
@@ -124,12 +119,12 @@ class ProviderFamily(BaseModel):
     """
 
     constructor: ComponentConstructor
-    instances: Dict[str, ComponentInstance]
+    instances: dict[str, ComponentInstance]
 
 
 # Type alias for the entire component tree structure
 # Example: components.llms.langchain.groq
-ComponentsTree = Dict[str, Dict[str, Dict[str, ProviderFamily]]]
+ComponentsTree = dict[str, dict[str, dict[str, ProviderFamily]]]
 
 
 # ========== AGENTS CONFIGURATION ==========
@@ -147,10 +142,10 @@ class AgentComponents(BaseModel):
         Any other component types can be added dynamically.
     """
 
-    llms: Optional[Dict[str, str]] = None
-    tools: Optional[Dict[str, str]] = None
-    databases: Optional[Dict[str, str]] = None
-    retrievers: Optional[Dict[str, str]] = None
+    llms: dict[str, str] | None = None
+    tools: dict[str, str] | None = None
+    databases: dict[str, str] | None = None
+    retrievers: dict[str, str] | None = None
 
     class Config:
         extra = "allow"  # Allow additional fields for future component types
@@ -178,8 +173,8 @@ class AgentConstructor(BaseModel):
     """
 
     module_class: str
-    components: Optional[AgentComponents] = None
-    config: Optional[Dict[str, Any]] = None
+    components: AgentComponents | None = None
+    config: dict[str, Any] | None = None
 
 
 class AgentConfig(BaseModel):
@@ -198,7 +193,7 @@ class AgentConfig(BaseModel):
 
 # Type alias for the entire agents tree structure
 # Example: agents.langchain.basic_answer
-AgentsTree = Dict[str, Dict[str, AgentConfig]]
+AgentsTree = dict[str, dict[str, AgentConfig]]
 
 
 # ========== USE CASES CONFIGURATION ==========
@@ -214,7 +209,7 @@ class UseCaseComponents(BaseModel):
         Any other component types can be added dynamically.
     """
 
-    agents: Optional[Dict[str, str]] = None
+    agents: dict[str, str] | None = None
 
     class Config:
         extra = "allow"  # Allow additional fields for future component types
@@ -233,7 +228,9 @@ class UseCaseInfo(BaseModel):
     name: str
     description: str
     path_prefix: str
-    router_factory: Optional[str] = None  # e.g., "learn_ai_agents.infrastructure.inbound.controllers.agents.robust:get_router"
+    router_factory: str | None = (
+        None  # e.g., "learn_ai_agents.infrastructure.inbound.controllers.agents.robust:get_router"
+    )
 
 
 class UseCaseConstructor(BaseModel):
@@ -246,8 +243,8 @@ class UseCaseConstructor(BaseModel):
     """
 
     module_class: str
-    components: Optional[UseCaseComponents] = None
-    config: Optional[Dict[str, Any]] = None
+    components: UseCaseComponents | None = None
+    config: dict[str, Any] | None = None
 
 
 class UseCaseConfig(BaseModel):
@@ -266,11 +263,12 @@ class UseCaseConfig(BaseModel):
 
 # Type alias for the entire use cases tree structure
 # Example: use_cases.basic_answer
-UseCasesTree = Dict[str, UseCaseConfig]
+UseCasesTree = dict[str, UseCaseConfig]
 
 
 # ========== YAML CONFIGURATION SOURCE ==========
 # Custom Pydantic settings source for loading YAML with environment variable expansion
+
 
 class EnvExpandingYamlSettingsSource(PydanticBaseSettingsSource):
     """Custom Pydantic settings source that loads YAML with environment variable expansion.
@@ -299,11 +297,11 @@ class EnvExpandingYamlSettingsSource(PydanticBaseSettingsSource):
     """
 
     def __init__(
-            self, 
-            settings_cls: type[BaseSettings],
-            yaml_path: Path,
-            extra_env_for_expand: Optional[Mapping[str, str | None]] = None,
-        ):
+        self,
+        settings_cls: type[BaseSettings],
+        yaml_path: Path,
+        extra_env_for_expand: Mapping[str, str | None] | None = None,
+    ):
         """Initialize the YAML settings source.
 
         Args:
@@ -322,10 +320,7 @@ class EnvExpandingYamlSettingsSource(PydanticBaseSettingsSource):
             text = yaml_path.read_text(encoding="utf-8")
 
             # Build env mapping where OS env wins over .env values
-            dotenv_vars: dict[str, str] = {
-                k: v for k, v in extra_env_for_expand.items()
-                if v is not None
-            }
+            dotenv_vars: dict[str, str] = {k: v for k, v in extra_env_for_expand.items() if v is not None}
             env_for_expand = ChainMap(os.environ, dotenv_vars)
 
             secrets_dir = Path(os.getenv("SECRETS_DIR", "/run/secrets"))
@@ -348,7 +343,7 @@ class EnvExpandingYamlSettingsSource(PydanticBaseSettingsSource):
             return self.data[key], key, value_is_complex
         return None, key, value_is_complex
 
-    def __call__(self) -> Dict[str, Any]:
+    def __call__(self) -> dict[str, Any]:
         """Return the entire data dictionary when the source is called.
 
         Returns:
@@ -398,14 +393,14 @@ class AppSettings(BaseSettings):
         cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings
     ):
         """Customize settings sources with proper priority and YAML expansion support.
-        
+
         Priority order (highest to lowest):
         1. Constructor arguments (init_settings)
         2. Environment variables (env_settings)
         3. .env file (dotenv_settings)
         4. Docker secrets (file_secret_settings)  -> overrides YAML for actual settings fields
         5. YAML configuration file (yaml_source)
-        
+
         Notes:
         - DotEnvSettingsSource reads env_file from model_config and exposes .env vars.
         - YAML expansion uses OS env + .env vars + /run/secrets/<NAME>.
@@ -474,7 +469,7 @@ class AppSettings(BaseSettings):
         else:
             raise ValueError(f"Invalid ref_type '{ref_type}'. Must be 'component', 'agent', or 'use_case'.")
 
-    def _resolve_component(self, ref: str) -> tuple[str, Dict[str, Any]]:
+    def _resolve_component(self, ref: str) -> tuple[str, dict[str, Any]]:
         """Internal method to resolve component references.
 
         Component format: <component_type>.<framework>.<family>.<instance>
@@ -535,7 +530,7 @@ class AppSettings(BaseSettings):
         except KeyError as e:
             raise KeyError(f"Could not resolve use case '{ref}': missing {e}") from e
 
-    def list_components(self) -> Dict[str, Any]:
+    def list_components(self) -> dict[str, Any]:
         """List all available components with their complete configuration.
 
         Returns:
@@ -559,7 +554,7 @@ class AppSettings(BaseSettings):
                 ]
             }
         """
-        result: Dict[str, list] = {}
+        result: dict[str, list] = {}
 
         for comp_type, frameworks in self.components.items():
             component_list = []
@@ -570,7 +565,7 @@ class AppSettings(BaseSettings):
                     family_has_api_key = family.constructor.api_key is not None
 
                     for instance_name, instance_cfg in family.instances.items():
-                        component_item: Dict[str, Any] = {
+                        component_item: dict[str, Any] = {
                             "ref": f"{comp_type}.{framework}.{family_name}.{instance_name}",
                             "info": {"framework": framework, "family": family_name, "instance": instance_name},
                             "params": instance_cfg.params,
@@ -586,7 +581,7 @@ class AppSettings(BaseSettings):
 
         return result
 
-    def list_agents(self) -> list[Dict[str, Any]]:
+    def list_agents(self) -> list[dict[str, Any]]:
         """List all available agents with their complete metadata and configuration.
 
         Returns:
@@ -609,11 +604,11 @@ class AppSettings(BaseSettings):
                 }
             ]
         """
-        result: list[Dict[str, Any]] = []
+        result: list[dict[str, Any]] = []
 
         for framework, agents in self.agents.items():
             for agent_name, agent_cfg in agents.items():
-                agent_item: Dict[str, Any] = {
+                agent_item: dict[str, Any] = {
                     "ref": f"agents.{framework}.{agent_name}",
                     "info": {
                         "name": agent_cfg.info.name,
@@ -631,7 +626,7 @@ class AppSettings(BaseSettings):
 
         return result
 
-    def list_use_cases(self) -> Dict[str, Any]:
+    def list_use_cases(self) -> dict[str, Any]:
         """List all available use cases with their complete metadata and configuration.
 
         Returns:
@@ -653,9 +648,9 @@ class AppSettings(BaseSettings):
                 }
             }
         """
-        result: Dict[str, Any] = {}
+        result: dict[str, Any] = {}
         for use_case_name, use_case_cfg in self.use_cases.items():
-            use_case_info: Dict[str, Any] = {
+            use_case_info: dict[str, Any] = {
                 "name": use_case_cfg.info.name,
                 "description": use_case_cfg.info.description,
                 "path_prefix": use_case_cfg.info.path_prefix,
