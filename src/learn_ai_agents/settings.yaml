@@ -1,4 +1,24 @@
 components:
+  # Database Configuration
+  databases:
+    mongo:
+      engine:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.database.mongo.mongo_engine.MongoEngineAdapter
+        instances:
+          default:
+            params:
+              uri: ${MONGO_URI}
+              database_name: ${MONGO_DATABASE}
+      pymongo:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.database.mongo.pymongo_async.PyMongoAsyncAdapter
+        instances:
+          default:
+            params:
+              uri: ${MONGO_URI}
+              database_name: ${MONGO_DATABASE}
+
   llms:
     langchain:
       groq:
@@ -9,6 +29,35 @@ components:
           default:
             params:
               temperature: 0.1
+
+  chat_history_persistence:
+    mongo:
+      store:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.chat_history.mongo.repository.MongoChatHistoryStore
+        instances:
+          default:
+            params:
+              database_ref: databases.mongo.engine.default
+
+  checkpointer:
+    mongo:
+      saver:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.checkpointers.mongo.MongoCheckpointerAdapter
+        instances:
+          default:
+            params:
+              database_ref: databases.mongo.pymongo.default
+              db_name: ${MONGO_DATABASE}
+              checkpoint_collection_name: checkpoints
+    memory:
+      saver:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.checkpointers.memory.MemoryCheckpointerAdapter
+        instances:
+          default:
+            params: {}
 
 agents:
   langchain:
@@ -21,6 +70,17 @@ agents:
         components:
           llms: 
             default: llms.langchain.groq.default
+    adding_memory:
+      info:
+        name: Adding Memory Agent
+        description: An agent with conversation memory using LangGraph and MongoDB checkpointing.
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.adding_memory.agent.AddingMemoryLangGraphAgent
+        components:
+          llms: 
+            default: llms.langchain.groq.default
+          chat_history_persistence: chat_history_persistence.mongo.store.default
+          checkpointer: checkpointer.mongo.saver.default
 
 use_cases:
   basic_answer:
@@ -34,4 +94,16 @@ use_cases:
       components:
         agents:
           agent: agents.langchain.basic_answer
+      config: {}
+  adding_memory:
+    info:
+      name: Adding Memory Use Case
+      description: A use case that provides conversational answers with memory using LangGraph.
+      path_prefix: /03_adding_memory
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.adding_memory:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.adding_memory.use_case.AddingMemoryUseCase
+      components:
+        agents:
+          agent: agents.langchain.adding_memory
       config: {}
