@@ -25,9 +25,6 @@ dev = [
     "ruff",
 ]
 
-[project.scripts]
-learn_ai_agents = "learn_ai_agents.cli:app"
-
 [tool.ty]
 # All rules are enabled as "error" by default; no need to specify unless overriding.
 # Example override: relax a rule for the entire project (uncomment if needed).

@@ -95,10 +95,7 @@ uv python install 3.12
 # 2) Create & sync the project environment from pyproject.toml
 uv sync
 
-# 3) Run tests (empty at this stage, but wired)
-uv run pytest -q
-
-# 4) (Later) run the API once the first route exists
+# 3) (Later) run the API once the first route exists
 uv run uvicorn learn_ai_agents.<your_api_module>:app --reload
 ```
 
@@ -138,4 +135,4 @@ Happy building! Subsequent branches will add the first use case, a small FastAPI
 
 ## Credits
 
-This package was created with [Cookiecutter](https://github.com/audreyfeldroy/cookiecutter) and the [agent-api-cookiecutter](https://github.com/neural-maze/agent-api-cookiecutter) project template.
+This package was inspired by [Cookiecutter](https://github.com/audreyfeldroy/cookiecutter) and the [agent-api-cookiecutter](https://github.com/neural-maze/agent-api-cookiecutter) project template.

@@ -15,9 +15,6 @@ dependencies = [
   "types-pyyaml>=6.0.12.20250915",
 ]
 
-[project.scripts]
-learn_ai_agents = "learn_ai_agents.cli:app"
-
 [tool.uv]
 package = true
 

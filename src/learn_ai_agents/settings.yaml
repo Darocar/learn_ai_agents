@@ -1,5 +1,143 @@
-# Components configuration will be built incrementally
-# This file defines the dependency injection setup for the application
+# Settings Configuration
+# This file defines the component registry for dependency injection
+# Components are organized by category and will be filled incrementally
 
 components:
-  # Add your components here as you build them
+  # Database Configuration
+  databases:
+    # mongo:
+    #   engine:
+    #     constructor:
+    #       module_class: path.to.MongoAdapter
+    #     instances:
+    #       default:
+    #         params:
+    #           uri: ${MONGO_URI}
+    #           database_name: ${MONGO_DATABASE}
+
+  # LLM Providers
+  llms:
+    # langchain:
+    #   groq:
+    #     constructor:
+    #       module_class: path.to.LangchainGroqAdapter
+    #       api_key: ${GROQ_API_KEY}
+    #     instances:
+    #       default:
+    #         params:
+    #           temperature: 0.1
+    #           model: llama-3.1-70b-versatile
+
+  # Chat History Persistence
+  chat_history_persistence:
+    # mongo:
+    #   store:
+    #     constructor:
+    #       module_class: path.to.MongoChatHistoryStore
+    #     instances:
+    #       default:
+    #         params:
+    #           database_ref: databases.mongo.engine.default
+
+  # Checkpointer (for agent state persistence)
+  checkpointer:
+    # memory:
+    #   saver:
+    #     constructor:
+    #       module_class: path.to.MemoryCheckpointerAdapter
+    #     instances:
+    #       default:
+    #         params: {}
+
+  # Document Repository (for RAG/content indexing)
+  document_repository:
+    # mongo:
+    #   store:
+    #     constructor:
+    #       module_class: path.to.MongoDocumentRepository
+    #     instances:
+    #       default:
+    #         params:
+    #           database_ref: databases.mongo.engine.default
+
+  # Chunk Repository (for RAG/content indexing)
+  chunk_repository:
+    # mongo:
+    #   store:
+    #     constructor:
+    #       module_class: path.to.MongoChunkRepository
+    #     instances:
+    #       default:
+    #         params:
+    #           database_ref: databases.mongo.engine.default
+
+  # Vector Store Repository (for embeddings storage)
+  vector_store_repository:
+    # qdrant:
+    #   store:
+    #     constructor:
+    #       module_class: path.to.QdrantVectorStoreRepository
+    #     instances:
+    #       default:
+    #         params:
+    #           host: ${QDRANT_HOST}
+    #           port: ${QDRANT_PORT}
+    #           vector_size: 384
+    #           distance: COSINE
+
+  # Embedders (for generating vector embeddings)
+  embedders:
+    # sentence_transformers:
+    #   all_minilm_l6_v2:
+    #     constructor:
+    #       module_class: path.to.SentenceTransformerEmbedder
+    #     instances:
+    #       default:
+    #         params:
+    #           model_name: all-MiniLM-L6-v2
+
+  # Tracing/Observability
+  tracers:
+    # opik:
+    #   constructor:
+    #     module_class: path.to.OpikTracerAdapter
+    #   instances:
+    #     default:
+    #       params:
+    #         api_key: ${OPIK_API_KEY}
+    #         workspace: ${OPIK_WORKSPACE}
+
+  # Tools (for agent capabilities)
+  tools:
+    # web_search:
+    #   duckduckgo:
+    #     constructor:
+    #       module_class: path.to.DuckDuckGoSearchTool
+    #     instances:
+    #       default:
+    #         params:
+    #           max_results: 5
+
+  # Agents
+  agents:
+    # chat_agent:
+    #   constructor:
+    #     module_class: path.to.ChatAgentFactory
+    #   instances:
+    #     default:
+    #       params:
+    #         llm_ref: llms.langchain.groq.default
+    #         checkpointer_ref: checkpointer.memory.saver.default
+    #         tracer_ref: tracers.opik.default
+
+  # Use Cases
+  use_cases:
+    # chat:
+    #   simple_chat:
+    #     constructor:
+    #       module_class: path.to.SimpleChatUseCase
+    #     instances:
+    #       default:
+    #         params:
+    #           agent_ref: agents.chat_agent.default
+    #           history_store_ref: chat_history_persistence.mongo.store.default
