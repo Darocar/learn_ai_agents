@@ -3,6 +3,7 @@
 from typing import Any
 
 from langchain_groq import ChatGroq
+from pydantic import SecretStr
 
 from learn_ai_agents.application.outbound_ports.llm_model import ChatModelProvider
 
@@ -25,7 +26,7 @@ class GroqChatModelProvider(ChatModelProvider):
     def get_model(self) -> Any:
         """Get configured ChatGroq instance."""
         return ChatGroq(
-            api_key=self._api_key,
+            api_key=SecretStr(self._api_key),
             model=self._model_name,
             temperature=self._temperature,
         )

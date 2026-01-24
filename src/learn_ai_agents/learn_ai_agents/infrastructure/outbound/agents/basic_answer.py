@@ -33,7 +33,8 @@ class LangChainBasicAnswerAgent(AgentEngine):
         response: AIMessage = llm.invoke(messages)
 
         # Convert back to domain Message
-        return Message(role=Role.ASSISTANT, content=response.content)
+        content_str = response.content if isinstance(response.content, str) else str(response.content)
+        return Message(role=Role.ASSISTANT, content=content_str)
 
     def stream(self, new_message: Message, config: Config) -> Iterable[ChunkDelta]:
         """Process message and stream response in chunks."""
@@ -48,9 +49,9 @@ class LangChainBasicAnswerAgent(AgentEngine):
             if chunk.content:
                 yield ChunkDelta(text=chunk.content)
 
-    def _convert_to_langchain_messages(self, domain_messages: list[Message]) -> list:
+    def _convert_to_langchain_messages(self, domain_messages: list[Message]) -> list:  # type: ignore
         """Convert domain Messages to LangChain message format."""
-        langchain_messages = []
+        langchain_messages: list = []
         for msg in domain_messages:
             if msg.role == Role.SYSTEM:
                 langchain_messages.append(SystemMessage(content=msg.content))
