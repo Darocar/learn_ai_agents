@@ -59,6 +59,73 @@ components:
           default:
             params: {}
 
+  # Document and Chunk Repositories (for RAG implementation)
+  document_repository:
+    mongo:
+      store:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.content_indexer.repositories.documents.MongoDocumentRepository
+        instances:
+          default:
+            params:
+              database_ref: databases.mongo.engine.default
+
+  chunk_repository:
+    mongo:
+      store:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.content_indexer.repositories.chunks.MongoChunkRepository
+        instances:
+          default:
+            params:
+              database_ref: databases.mongo.engine.default
+
+  # Vector Store Repository (for embeddings storage and similarity search)
+  vector_store_repository:
+    qdrant:
+      store:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.content_indexer.repositories.vector_stores.QdrantVectorStoreRepository
+        instances:
+          default:
+            params:
+              host: ${QDRANT_HOST}
+              port: ${QDRANT_PORT}
+              vector_size: 384  # all-MiniLM-L6-v2 embedding dimension
+              distance: COSINE
+
+  # Embedders (for generating vector embeddings)
+  embedders:
+    sentence_transformers:
+      all_minilm_l6_v2:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.content_indexer.embedders.sentence_transformer.SentenceTransformerEmbedder
+        instances:
+          default:
+            params:
+              model_name: all-MiniLM-L6-v2
+              device: cpu  # or 'cuda' if GPU available
+
+  # Content Indexer - Source Providers
+  content_indexer:
+    source_ingestion:
+      baldurs_gate_3_characters:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.content_indexer.source_ingestion.BaldursGate3CharactersAdapter
+        instances:
+          default:
+            params:
+              timeout: 15
+    document_splitting:
+      markdown_splitter:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.content_indexer.document_splitting.MarkdownHierarchicalSplitter
+        instances:
+          default:
+            params:
+              chunk_size: 1000
+              chunk_overlap: 200
+
   tools:
     langchain:
       math_expression:
@@ -79,6 +146,14 @@ components:
         instances:
           default:
             params: {}
+      vector_search:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.tools.langchain_fwk.vector_search.LangChainVectorSearchToolAdapter
+        instances:
+          default:
+            params:
+              embedder_ref: embedders.sentence_transformers.all_minilm_l6_v2.default
+              vector_store_ref: vector_store_repository.qdrant.store.default
 
 agents:
   langchain:
@@ -118,6 +193,23 @@ agents:
           chat_history_persistence: chat_history_persistence.mongo.store.default
           checkpointer: checkpointer.mongo.saver.default
         config: {}
+    character_chat:
+      info:
+        name: Character Chat Agent
+        description: An agent that chats as a BG3 character using RAG with vector search.
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.character_chat.agent.CharacterChatLangchainAgent
+        components:
+          llms: 
+            default: llms.langchain.groq.default
+          tools:
+            vector_search: tools.langchain.vector_search.default
+          chat_history_persistence: chat_history_persistence.mongo.store.default
+          checkpointer: checkpointer.mongo.saver.default
+        config:
+          database_name: learn_ai_agents
+          checkpoints_collection: checkpoints
+          enable_checkpointing: true
 
 use_cases:
   basic_answer:
@@ -155,4 +247,64 @@ use_cases:
       components:
         agents:
           agent: agents.langchain.adding_tools
+      config: {}
+  character_chat:
+    info:
+      name: Character Chat Use Case
+      description: A use case for chatting with BG3 characters using RAG and vector search.
+      path_prefix: /05_character_chat
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.character_chat:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.character_chat.use_case.CharacterChatUseCase
+      components:
+        agents:
+          agent: agents.langchain.character_chat
+        vector_store:
+          vector_store: vector_store_repository.qdrant.store.default
+      config: {}
+  source_ingestion:
+    info:
+      name: Retrieve Content Use Case
+      description: A use case for retrieving content from web sources and storing in MongoDB.
+      path_prefix: /05_a_source_ingestion
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.content_indexer.source_ingestion:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.content_indexer.source_ingestion.use_case.SourceIngestionUseCase
+      components:
+        source_ingestion:
+          source_ingestion: content_indexer.source_ingestion.baldurs_gate_3_characters.default
+        document_repository:
+          document_repository: document_repository.mongo.store.default
+      config: {}
+  document_splitting:
+    info:
+      name: Document Splitting Use Case
+      description: A use case for splitting markdown documents into chunks for vector storage.
+      path_prefix: /05_b_document_splitting
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.content_indexer.document_splitting:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.content_indexer.document_splitting.use_case.DocumentSplittingUseCase
+      components:
+        document_splitters:
+          markdown: content_indexer.document_splitting.markdown_splitter.default
+        chunk_repository:
+          chunk_repository: chunk_repository.mongo.store.default
+        document_repository:
+          document_repository: document_repository.mongo.store.default
+      config: {}
+  vectorization:
+    info:
+      name: Vectorization Use Case
+      description: A use case for generating embeddings for document chunks and storing them in a vector database.
+      path_prefix: /05_c_vectorization
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.content_indexer.vectorization:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.content_indexer.vectorization.use_case.VectorizationUseCase
+      components:
+        embedders:
+          sentence_transformers: embedders.sentence_transformers.all_minilm_l6_v2.default
+        chunk_repository:
+          chunk_repository: chunk_repository.mongo.store.default
+        vector_store:
+          vector_store: vector_store_repository.qdrant.store.default
       config: {}
