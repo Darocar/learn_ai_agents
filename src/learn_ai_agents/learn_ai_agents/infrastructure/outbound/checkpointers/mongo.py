@@ -4,7 +4,7 @@ This module provides a MongoDB implementation of checkpointing for LangGraph age
 """
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.mongodb import MongoDBSaver
+from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
 from learn_ai_agents.application.outbound_ports.database import DatabaseClient
 from learn_ai_agents.logging import get_logger
 
@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 class MongoCheckpointerAdapter(BaseLangChainCheckpointerAdapter):
     """MongoDB checkpointer adapter for LangGraph agents.
 
-    This adapter wraps the MongoDBSaver to provide a consistent interface
+    This adapter wraps the AsyncMongoDBSaver to provide a consistent interface
     for checkpointing in LangGraph agents using MongoDB persistence.
     """
 
@@ -31,7 +31,7 @@ class MongoCheckpointerAdapter(BaseLangChainCheckpointerAdapter):
                 - checkpoint_collection_name: Name of the collection to store checkpoints.
 
         Returns:
-            BaseCheckpointSaver: MongoDBSaver instance ready to use.
+            BaseCheckpointSaver: AsyncMongoDBSaver instance ready to use.
         """
         database = kwargs.get("database")
         db_name = kwargs.get("db_name")
@@ -48,7 +48,7 @@ class MongoCheckpointerAdapter(BaseLangChainCheckpointerAdapter):
         # Get the PyMongo async client from the database adapter
         pymongo_client = database.get_client()  # type: ignore
 
-        checkpointer = MongoDBSaver(
+        checkpointer = AsyncMongoDBSaver(
             client=pymongo_client,
             db_name=db_name,  # type: ignore
             checkpoint_collection_name=checkpoint_collection_name,  # type: ignore
