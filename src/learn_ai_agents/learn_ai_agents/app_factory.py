@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from learn_ai_agents.infrastructure.bootstrap.app_container import AppContainer
-from learn_ai_agents.infrastructure.inbound.controllers.discovery import discovery
+from learn_ai_agents.infrastructure.inbound.controllers.discovery.discovery import router as discovery_router
 from learn_ai_agents.logging import get_logger
 from learn_ai_agents.settings import AppSettings
 
@@ -129,7 +129,7 @@ def create_app(app_settings: AppSettings) -> FastAPI:
     logger.info("✅ All routers registered")
     
     # Register discovery router (not in use_cases but always available)
-    app.include_router(discovery.router, prefix="/api", tags=["discovery"])
+    app.include_router(discovery_router)
     logger.info("✅ Discovery router registered")
     
     logger.info("✅ Application created successfully")

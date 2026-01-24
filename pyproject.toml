@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["src/learn_ai_agents"]
+members = ["src/learn_ai_agents", "src/streamlit_ui"]
 
 [dependency-groups]
 dev = [

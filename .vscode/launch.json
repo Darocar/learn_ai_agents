@@ -2,14 +2,35 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Run Learn AI Agents",
+            "name": "Run learn_ai_agents",
             "type": "debugpy",
             "request": "launch",
             "module": "learn_ai_agents",
+            "cwd": "${workspaceFolder}/src/learn_ai_agents",
             "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
             "justMyCode": false,
-            "envFile": "${workspaceFolder}/src/learn_ai_agents/.env",
-            "cwd": "${workspaceFolder}"
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src/learn_ai_agents"
+            }
+        },
+        {
+            "name": "Run streamlit",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${workspaceFolder}/src/streamlit_ui/streamlit_ui/Home_Page.py",
+                "--server.port=8501"
+            ],
+            "cwd": "${workspaceFolder}/src/streamlit_ui",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src/streamlit_ui"
+            }
         }
     ]
 }
