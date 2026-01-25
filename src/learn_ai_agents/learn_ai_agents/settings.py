@@ -34,7 +34,7 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, SecretStr
-from pydantic_settings import BaseSettings, DotEnvSettingsSource, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from learn_ai_agents.logging import get_logger
 
@@ -405,7 +405,7 @@ class AppSettings(BaseSettings):
         - DotEnvSettingsSource reads env_file from model_config and exposes .env vars.
         - YAML expansion uses OS env + .env vars + /run/secrets/<NAME>.
         """
-        sources = [init_settings, env_settings, dotenv_settings, file_secret_settings]
+        sources = [init_settings, file_secret_settings]
 
         # Build YAML source with .env-powered variable expansion
         default_yaml_path = Path(__file__).resolve().parent.parent / "settings.yaml"
@@ -413,7 +413,7 @@ class AppSettings(BaseSettings):
 
         # Read raw dotenv vars (from model_config.env_file)
         # DotEnvSettingsSource inherits EnvSettingsSource and exposes env_vars
-        raw_dotenv_vars = DotEnvSettingsSource(settings_cls).env_vars
+        raw_dotenv_vars = dotenv_settings.env_vars # type: ignore
 
         init_kwargs = getattr(init_settings, "init_kwargs", {}) or {}
         if not init_kwargs:
