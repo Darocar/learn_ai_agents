@@ -6,8 +6,9 @@ LangChain-specific types, enabling seamless integration with the LangChain frame
 
 # Adjust imports to your package names
 import json
+from datetime import datetime
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Dict, List
 
 from langchain_core.messages import (
     AIMessage,
@@ -17,10 +18,8 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.runnables import RunnableConfig
-
 from learn_ai_agents.domain.models.agents.config import Config
 from learn_ai_agents.domain.models.agents.messages import ChunkDelta, Message, Role
-from learn_ai_agents.infrastructure.helpers.generators import Helper
 
 # Map domain Role -> LangChain message class
 ROLE_TO_LC: Mapping[Role, type[BaseMessage]] = {
@@ -104,7 +103,7 @@ def to_domain_message(
         role = Role(kind.lower())  # validates and converts to enum
     except ValueError as e:
         raise ValueError(f"Unsupported role: {kind!r}") from e
-    return Message(role=role, content=content, timestamp=Helper.generate_timestamp(), metadata=metadata)
+    return Message(role=role, content=content, timestamp=datetime.now(), metadata=metadata)
 
 
 def lc_message_to_domain(lc_message: BaseMessage) -> Message:
@@ -120,7 +119,7 @@ def lc_message_to_domain(lc_message: BaseMessage) -> Message:
         ValueError: If the message type is unsupported.
     """
     # Determine the role based on message type
-    metadata: dict[str, Any] = {}
+    metadata: Dict[str, Any] = {}
     if isinstance(lc_message, HumanMessage):
         role = Role.USER
     elif isinstance(lc_message, AIMessage):
@@ -152,7 +151,7 @@ def lc_message_to_domain(lc_message: BaseMessage) -> Message:
     content = content_to_text(lc_message.content)
 
     # Extract timestamp from additional_kwargs if available, otherwise use current time
-    timestamp = Helper.generate_timestamp()
+    timestamp = datetime.now()
     if hasattr(lc_message, "additional_kwargs") and lc_message.additional_kwargs:
         timestamp = lc_message.additional_kwargs.get("ts", timestamp)
 
@@ -257,9 +256,9 @@ def safe_jsonable(obj: Any) -> Any:
 
 
 def extract_tool_calls(
-    result_messages: list[BaseMessage],
+    result_messages: List[BaseMessage],
     input_message_count: int,
-) -> list[dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     """Extract tool calls (name, args, output) from LC messages.
 
     We only look at messages created during this run
@@ -273,7 +272,7 @@ def extract_tool_calls(
         List of dictionaries containing sanitized tool call information.
     """
     new_messages = result_messages[input_message_count:]
-    index: dict[str, dict[str, Any]] = {}
+    index: Dict[str, Dict[str, Any]] = {}
 
     # 1) collect tool_calls from AIMessage.tool_calls
     for msg in new_messages:
