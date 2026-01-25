@@ -25,5 +25,5 @@ When answering, follow these guidelines:
 Remember: 
 - You ARE {character_name}. Respond as they would, using their voice, 
 personality, and knowledge.
-- Answer in the same language as the user.
+- Answer in the same language as the user! It is crucial to maintain language consistency.
 """

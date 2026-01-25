@@ -318,38 +318,6 @@ use_cases:
         vector_store:
           vector_store: vector_store_repository.qdrant.store.default
       config: {}
-  agent_tracing:
-    info:
-      name: Character Chat Use Case with Tracing
-      description: A use case for chatting with BG3 characters using RAG and vector search with tracing.
-      path_prefix: /06_agent_tracing
-      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.agent_tracing:get_router
-    constructor:
-      module_class: learn_ai_agents.application.use_cases.agents.agent_tracing.use_case.AgentTracingUseCase
-      components:
-        agents:
-          agent: agents.langchain.tracing_chat
-        vector_store:
-          vector_store: vector_store_repository.qdrant.store.default
-      config: {}
-  robust:
-    info:
-      name: Robust Character Chat Use Case
-      description: A robust use case for chatting with BG3 characters using RAG with enhanced error handling and monitoring.
-      path_prefix: /07_robust
-      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.robust:get_router
-    constructor:
-      module_class: learn_ai_agents.application.use_cases.agents.robust.use_case.RobustUseCase
-      components:
-        agents:
-          agent: agents.langchain.robust
-        vector_store:
-          vector_store: vector_store_repository.qdrant.store.default
-      config:
-        retry_policy:
-          max_attempts: 3
-          backoff_multiplier: 2
-          initial_delay_ms: 100
   source_ingestion:
     info:
       name: Retrieve Content Use Case
@@ -396,3 +364,35 @@ use_cases:
         vector_store:
           vector_store: vector_store_repository.qdrant.store.default
       config: {}
+  agent_tracing:
+    info:
+      name: Character Chat Use Case with Tracing
+      description: A use case for chatting with BG3 characters using RAG and vector search with tracing.
+      path_prefix: /06_agent_tracing
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.agent_tracing:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.agent_tracing.use_case.AgentTracingUseCase
+      components:
+        agents:
+          agent: agents.langchain.tracing_chat
+        vector_store:
+          vector_store: vector_store_repository.qdrant.store.default
+      config: {}
+  robust:
+    info:
+      name: Robust Character Chat Use Case
+      description: A robust use case for chatting with BG3 characters using RAG with enhanced error handling and monitoring.
+      path_prefix: /07_robust
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.robust:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.robust.use_case.RobustUseCase
+      components:
+        agents:
+          agent: agents.langchain.robust
+        vector_store:
+          vector_store: vector_store_repository.qdrant.store.default
+      config:
+        retry_policy:
+          max_attempts: 3
+          backoff_multiplier: 2
+          initial_delay_ms: 100
