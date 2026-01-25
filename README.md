@@ -1,39 +1,42 @@
-# LEARN-AI-AGENTS — Branch `05_vector_database_v2`
+# LEARN-AI-AGENTS — Branch `06_adding_traces_v2`
 
-This branch adds **RAG (Retrieval-Augmented Generation)** with **Vector Database** and **Embeddings** for knowledge-enhanced agents.
+This branch adds **observability and tracing** to our RAG-powered character chat agents! We've evolved from functional agents to **production-ready agents** with full visibility into execution flow, tool usage, and performance metrics.
 
 **What's new in this branch:**
-- ✅ **Vector Database**: Qdrant integration for semantic search
-  - QdrantVectorStoreRepository with COSINE similarity
-  - 384-dimensional embeddings (all-MiniLM-L6-v2)
-  - Efficient similarity search for RAG
-- ✅ **Embeddings**: Sentence transformers for text vectorization
-  - SentenceTransformerEmbedder adapter
-  - all-MiniLM-L6-v2 model (384 dims, fast, high quality)
-  - Document and query embedding support
-- ✅ **Content Indexer**: Complete RAG pipeline
-  - Source ingestion (Baldur's Gate 3 character data from web)
-  - Document splitting (hierarchical markdown splitting)
-  - Vectorization (embedding generation and storage)
-  - MongoDB repositories for documents and chunks
-- ✅ **Character Chat Agent**: RAG-powered conversational agent
-  - Vector search tool for retrieving relevant context
-  - LangGraph state management with checkpointing
-  - Character-specific knowledge from ingested documents
-- ✅ **Content Indexer Use Cases**: Three-step RAG workflow
-  - `/05_a_source_ingestion`: Fetch and store documents
-  - `/05_b_document_splitting`: Split documents into chunks
-  - `/05_c_vectorization`: Generate embeddings and store in Qdrant
+- ✅ **Tracing Port**: Framework-agnostic tracing interface
+  - AgentTracingPort protocol for provider independence
+  - Easy to swap tracing providers (Opik, LangSmith, W&B)
+  - Clean separation between business logic and observability
+- ✅ **Opik Integration**: Production-grade observability platform
+  - OpikAgentTracerAdapter for automatic instrumentation
+  - Thread-based conversation grouping
+  - Real-time trace streaming
+  - Performance metrics and analytics
+- ✅ **Traced Agent**: Agent tracing use case with full observability
+  - TracingLangchainAgent with RAG capabilities
+  - Automatic LLM call tracking
+  - Tool invocation metrics
+  - State transition logging
+- ✅ **Helper Refactoring**: Extracted reusable LangChain utilities
+  - lc_message_to_domain() for message conversion
+  - safe_jsonable() for JSON serialization
+  - Tool call extraction helpers
+- ✅ **Docker Simplification**: Streamlined docker-compose setup
+  - Removed unnecessary network configuration
+  - Simplified service dependencies
+- **From Branch 05:**
+  - ✅ **Vector Database**: Qdrant integration for semantic search
+  - ✅ **Embeddings**: Sentence transformers (all-MiniLM-L6-v2)
+  - ✅ **Content Indexer**: Complete RAG pipeline
+  - ✅ **Character Chat Agent**: RAG-powered conversations
 - **From Branch 04:**
-  - ✅ **Tools System**: External tool integration (web search, math, age calculator)
-  - ✅ **Adding Tools Agent**: LangGraph with tool calling
+  - ✅ **Tools System**: External tool integration
 - **From Branch 03:**
-  - ✅ **Memory System**: MongoDB persistence and LangGraph state management
+  - ✅ **Memory System**: MongoDB persistence
 - **From Branch 02:**
   - ✅ **Streamlit Web UI**: Interactive chat interface
-  - ✅ **Discovery System**: System introspection
 
-> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Qdrant** + **Sentence Transformers** + **Groq** + **Streamlit**
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Qdrant** + **Opik** + **Groq** + **Streamlit**
 
 ---
 
@@ -41,139 +44,128 @@ This branch adds **RAG (Retrieval-Augmented Generation)** with **Vector Database
 
 ### New Features
 
-#### 1. Vector Database Integration
-Complete Qdrant setup for semantic search:
+#### 1. Tracing Port Architecture
+Framework-agnostic observability interface:
 
-**QdrantVectorStoreRepository** (`infrastructure/outbound/content_indexer/repositories/vector_stores/`):
-- Store embeddings with metadata (chunk_id, document_id, character)
-- Similarity search with configurable top_k
-- COSINE distance for semantic similarity
-- 384-dimensional vector space (all-MiniLM-L6-v2)
-
-**Configuration**:
-```yaml
-vector_store_repository:
-  qdrant:
-    store:
-      params:
-        host: ${QDRANT_HOST}  # Default: localhost
-        port: ${QDRANT_PORT}  # Default: 6333
-        vector_size: 384
-        distance: COSINE
-```
-
-#### 2. Embeddings System
-Sentence transformers for high-quality embeddings:
-
-**SentenceTransformerEmbedder** (`infrastructure/outbound/content_indexer/embedders/`):
-- Model: all-MiniLM-L6-v2 (384 dimensions)
-- Fast inference on CPU
-- Batch embedding support
-- Normalize vectors for COSINE similarity
-
-**Configuration**:
-```yaml
-embedders:
-  sentence_transformers:
-    all_minilm_l6_v2:
-      params:
-        model_name: all-MiniLM-L6-v2
-        device: cpu  # or 'cuda' for GPU
-```
-
-#### 3. Content Indexer - Complete RAG Pipeline
-Three-phase document processing:
-
-**Phase 1: Source Ingestion** (`/05_a_source_ingestion`):
-- Fetch character data from web (Baldur's Gate 3 wiki)
-- Store raw documents in MongoDB
-- BaldursGate3CharactersAdapter with timeout configuration
-
-**Phase 2: Document Splitting** (`/05_b_document_splitting`):
-- Hierarchical markdown splitting
-- Configurable chunk_size (1000) and overlap (200)
-- Preserve document structure and metadata
-- Store chunks in MongoDB
-
-**Phase 3: Vectorization** (`/05_c_vectorization`):
-- Generate embeddings for all chunks
-- Store vectors in Qdrant with metadata
-- Link chunks to documents for traceability
-
-**Repositories**:
-- MongoDocumentRepository: Full document storage
-- MongoChunkRepository: Chunk storage with document references
-- QdrantVectorStoreRepository: Vector embeddings with metadata
-
-#### 4. Character Chat Agent with RAG
-LangGraph agent enhanced with vector search:
-
-**CharacterChatLangchainAgent** (`infrastructure/outbound/agents/langchain_fwk/character_chat/`):
-- Vector search tool for context retrieval
-- Character-specific knowledge base
-- State management with conversation history
-- MongoDB checkpointing for persistence
-
-**Vector Search Tool**:
+**AgentTracingPort** (`application/outbound_ports/agents/tracing.py`):
 ```python
-# Automatically searches for relevant context
-# Returns top-k most similar chunks
-# Integrates context into agent responses
+class AgentTracingPort(Protocol):
+    """Protocol for agent tracing implementations."""
+    
+    def get_tracer(self, thread_id: str) -> Any:
+        """Return the underlying framework-specific tracer object."""
+        ...
+```
+
+**Why this matters:**
+- ✅ Provider independence — Works with Opik, LangSmith, W&B, etc.
+- ✅ Testability — Easy to mock tracing for tests
+- ✅ Swappability — Change providers without touching use cases
+- ✅ Clear contracts — Explicit interface requirements
+
+#### 2. Opik Integration
+Production-grade tracing adapter:
+
+**OpikAgentTracerAdapter** (`infrastructure/outbound/tracing/opik.py`):
+```python
+import opik
+from opik.integrations.langchain import OpikTracer
+
+class OpikAgentTracerAdapter(AgentTracingPort):
+    """Opik implementation of the AgentTracingPort."""
+    
+    def __init__(self, api_key: str, workspace: str, project_name: str) -> None:
+        opik.configure(api_key=api_key, workspace=workspace)
+        self.project_name = project_name
+    
+    def get_tracer(self, thread_id: str) -> OpikTracer:
+        return OpikTracer(
+            project_name=self.project_name,
+            thread_id=thread_id
+        )
+```
+
+**Configuration** (`settings.yaml`):
+```yaml
+tracing:
+  opik:
+    agent_tracer:
+      params:
+        api_key: ${OPIK_API_KEY}
+        workspace: ${OPIK_WORKSPACE}
+        project_name: ${OPIK_PROJECT_NAME}
+```
+
+**What gets traced:**
+- 🔍 LLM invocations with input/output tokens
+- 🛠️ Tool usage with arguments and results
+- 📊 State transitions in LangGraph
+- ⏱️ Performance metrics (latency, token usage)
+- 🔗 Conversation context via thread_id
+
+#### 3. Traced Agent with RAG
+Complete observability for character chat:
+
+**TracingLangchainAgent** (`infrastructure/outbound/agents/langchain_fwk/agent_tracing/`):
+- RAG-powered character chat with vector search
+- Automatic tracing of all operations
+- Thread-based conversation grouping
+- LangGraph state management
+- MongoDB checkpointing
+
+**Agent Configuration** (`settings.yaml`):
+```yaml
+agents:
+  langchain:
+    tracing_chat:
+      constructor:
+        module_class: ...agent_tracing.agent.TracingLangchainAgent
+        components:
+          llms:
+            default: llms.langchain.groq.default
+          tools:
+            vector_search: tools.langchain.vector_search.default
+          tracer: tracing.opik.agent_tracer.default
+        config:
+          enable_tracing: true
 ```
 
 **Usage**:
 ```bash
-curl -X POST http://localhost:8000/05_character_chat/ainvoke \
+curl -X POST http://localhost:8000/06_agent_tracing/ainvoke \
   -H "Content-Type: application/json" \
   -d '{
     "message": "Tell me about Shadowheart",
     "character_name": "shadowheart",
     "config": {"conversation_id": "user123"}
   }'
+# All LLM calls, tool invocations traced automatically
+# View traces in Opik dashboard
 ```
 
-#### 5. RAG Workflow Example
-Complete end-to-end RAG setup:
+#### 4. Helper Refactoring
+Reusable LangChain utilities:
 
-**Step 1: Ingest Documents**
-```bash
-curl -X POST http://localhost:8000/05_a_source_ingestion/execute \
-  -H "Content-Type: application/json" \
-  -d '{"source_name": "baldurs_gate_3_characters"}'
-# Fetches BG3 character data and stores in MongoDB
-```
+**helpers.py** enhancements:
+- `lc_message_to_domain()` - Convert LangChain messages to domain
+- `safe_jsonable()` - JSON serialization with error handling
+- `extract_tool_calls()` - Parse tool invocations
+- `to_lc_messages()` - Domain to LangChain conversion
+- `chunk_to_domain()` - Streaming chunk processing
 
-**Step 2: Split Documents**
-```bash
-curl -X POST http://localhost:8000/05_b_document_splitting/execute \
-  -H "Content-Type: application/json" \
-  -d '{"splitter_type": "markdown"}'
-# Splits documents into 1000-char chunks with 200-char overlap
-```
+These helpers reduce code duplication across agents and improve maintainability.
 
-**Step 3: Vectorize Chunks**
-```bash
-curl -X POST http://localhost:8000/05_c_vectorization/execute \
-  -H "Content-Type: application/json" \
-  -d '{"embedder_type": "sentence_transformers"}'
-# Generates embeddings and stores in Qdrant
-```
+#### 5. Docker Simplification
+Streamlined container orchestration:
 
-**Step 4: Chat with Character**
-```bash
-curl -X POST http://localhost:8000/05_character_chat/ainvoke \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "What are your abilities?",
-    "character_name": "shadowheart",
-    "config": {"conversation_id": "user123"}
-  }'
-# Agent retrieves relevant context and responds
-```
+**docker-compose.yaml**:
+- Removed custom network configuration
+- Simplified service dependencies
+- Cleaner setup for MongoDB and Qdrant
 
-### Previous Features (From Branches 02-04)
+### Previous Features (From Branches 02-05)
 
-#### Tools System (Branch 04)
+#### Vector Database & RAG (Branch 05)
 
 **LangChain Tool Adapters** (`infrastructure/outbound/tools/langchain_fwk/`):
 - **LangChainAgeCalculatorToolAdapter**: Wraps age calculator for LangChain
