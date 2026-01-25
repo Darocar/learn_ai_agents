@@ -29,6 +29,7 @@ dependencies = [
   "qdrant-client>=1.7.0",
   "sentence-transformers>=5.1.2",
   "opik>=1.9.33",
+  "ragas>=0.4.3",
   "uvicorn",
 ]
 

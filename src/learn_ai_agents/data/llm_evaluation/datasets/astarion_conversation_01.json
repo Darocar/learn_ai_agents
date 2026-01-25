@@ -1,0 +1,8 @@
+{
+    "user_input": "Hola, cuáles son tus habilidades",
+    "reference": "Mis habilidades son bastante... variadas, diría. Como un astuto y carismático Rogue, tengo una gran habilidad para el sigilo, el engaño y la manipulación. Mi clase inicial es la de Ladino, y al llegar al nivel 3, me convierto en un Tramposo Arcano por defecto. Mis habilidades incluyen una gran destreza, reflejos rápidos y una mente ágil. Pero, por supuesto, mi verdadera habilidad es mi capacidad para hablar mi manera de salir de situaciones... delicadas. ¿Y tú, qué te trae por aquí?",
+    "retrieved_contexts": [
+        "(Character: Astarion)\n# Overview\n\n## Starting Class\n\nBefore he is recruited, Astarion is a level 1 Rogue with the following Ability Scores: STR = 8, DEX = 17, CON = 14, INT = 12, WIS = 13, CH = 10.\n\nIf recruited, Astarion reverts to a level 1 Rogue with the standard ability scores for that Class.\n\nIf recruited, upon reaching level three, he defaults to the Arcane Trickster subclass.",
+        "(Character: Astarion)\n# Overview\n\n## Recruitment\n\nRecruitable in Act One.\n\nAstarion can be found standing on a road west of the crashed Nautiloid in the Wilderness. When approached, a scene plays where he feigns asking for help in defeating an  Intellect Devourer. Afterwards, he can be asked to join the party.\n\n### Leaving the party\n\nHanding Astarion over to  Gandrel in the Sunlit Wetlands, staking him when he attempts to bite the player character (but failing the strength check), ⁠breaking Yurgir's contract instead of killing him (and then failing to convince Astarion to stay), or interrupting his attempt to hijack the Ritual of Profane Ascension (without successfully talking him down) results in Astarion permanently leaving the party."
+    ]
+}

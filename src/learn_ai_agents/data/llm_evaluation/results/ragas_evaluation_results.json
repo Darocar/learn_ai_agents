@@ -1,0 +1,14 @@
+[
+  {
+    "dataset_name": "astarion_conversation_01",
+    "user_input": "Hola, cuáles son tus habilidades",
+    "context_precision": 0.99999999995,
+    "faithfulness": 0.6
+  },
+  {
+    "dataset_name": "gale_conversation_03",
+    "user_input": "Hola, cuándo apareces en el juego?",
+    "context_precision": 0.99999999995,
+    "faithfulness": 0.6
+  }
+]
