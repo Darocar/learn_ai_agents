@@ -14,6 +14,9 @@ from learn_ai_agents.application.use_cases.agents.adding_memory.use_case import 
 from learn_ai_agents.application.use_cases.agents.adding_tools.use_case import (
     AddingToolsUseCase,
 )
+from learn_ai_agents.application.use_cases.agents.agent_tracing.use_case import (
+    AgentTracingUseCase,
+)
 from learn_ai_agents.application.use_cases.agents.character_chat.use_case import (
     CharacterChatUseCase,
 )
@@ -90,6 +93,21 @@ def get_character_chat_use_case(request: Request) -> CharacterChatUseCase:
     """
     container = request.app.state.container
     return container.use_cases.get("character_chat")
+
+
+def get_agent_tracing_use_case(request: Request) -> AgentTracingUseCase:
+    """Get the Agent Tracing use case instance.
+
+    This dependency retrieves the AgentTracingUseCase from the application container.
+
+    Args:
+        request: FastAPI request object containing the app state.
+
+    Returns:
+        AgentTracingUseCase instance.
+    """
+    container = request.app.state.container
+    return container.use_cases.get("agent_tracing")
 
 
 def get_source_ingestion_use_case(request: Request) -> SourceIngestionUseCase:

@@ -154,6 +154,17 @@ components:
             params:
               embedder_ref: embedders.sentence_transformers.all_minilm_l6_v2.default
               vector_store_ref: vector_store_repository.qdrant.store.default
+  tracing:
+    opik:
+      agent_tracer:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.tracing.opik.OpikAgentTracerAdapter
+        instances:
+          default:
+            params:
+              api_key: ${OPIK_API_KEY}
+              workspace: ${OPIK_WORKSPACE}
+              project_name: ${OPIK_PROJECT_NAME}
 
 agents:
   langchain:
@@ -210,6 +221,25 @@ agents:
           database_name: learn_ai_agents
           checkpoints_collection: checkpoints
           enable_checkpointing: true
+    tracing_chat:
+      info:
+        name: Tracing Chat Agent
+        description: An agent that chats as a BG3 character using RAG with vector search and tracing.
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.agent_tracing.agent.TracingLangchainAgent
+        components:
+          llms: 
+            default: llms.langchain.groq.default
+          tools:
+            vector_search: tools.langchain.vector_search.default
+          chat_history_persistence: chat_history_persistence.mongo.store.default
+          checkpointer: checkpointer.mongo.saver.default
+          tracer: tracing.opik.agent_tracer.default
+        config:
+          database_name: learn_ai_agents
+          checkpoints_collection: checkpoints
+          enable_checkpointing: true
+          enable_tracing: true
 
 use_cases:
   basic_answer:
@@ -259,6 +289,20 @@ use_cases:
       components:
         agents:
           agent: agents.langchain.character_chat
+        vector_store:
+          vector_store: vector_store_repository.qdrant.store.default
+      config: {}
+  agent_tracer:
+    info:
+      name: Character Chat Use Case with Tracing
+      description: A use case for chatting with BG3 characters using RAG and vector search with tracing.
+      path_prefix: /06_agent_tracing
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.agent_tracing:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.agent_tracing.use_case.AgentTracingUseCase
+      components:
+        agents:
+          agent: agents.langchain.tracing_chat
         vector_store:
           vector_store: vector_store_repository.qdrant.store.default
       config: {}
