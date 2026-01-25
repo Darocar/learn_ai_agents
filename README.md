@@ -592,6 +592,132 @@ uv run uvicorn learn_ai_agents.<your_api_module>:app --reload
 
 ---
 
+## Prerequisites & External Dependencies
+
+This project integrates with several external services and tools. Here's what you need to set up:
+
+### 🤖 Groq (LLM Provider)
+
+**What it is**: Cloud-based LLM inference platform providing fast access to open models like Llama 3.3.
+
+**Setup**:
+1. Create an account at [https://console.groq.com](https://console.groq.com)
+2. Navigate to API Keys section
+3. Generate a new API key
+4. Add to your `.env` file:
+   ```bash
+   GROQ_API_KEY=your_groq_api_key_here
+   ```
+
+**Why we use it**: Groq provides fast, cost-effective access to state-of-the-art open-source LLMs with OpenAI-compatible API.
+
+### 🔭 Opik (Observability & Tracing)
+
+**What it is**: Agent observability platform for tracing LLM calls, tool executions, and conversation flows.
+
+**Setup**:
+1. Create an account at [https://www.comet.com/opik](https://www.comet.com/opik)
+2. Create a new workspace for your project
+3. Go to Settings → API Keys
+4. Generate an API key
+5. Add to your `.env` file:
+   ```bash
+   OPIK_API_KEY=your_opik_api_key_here
+   OPIK_WORKSPACE=your_workspace_name
+   ```
+
+**Why we use it**: Opik provides deep visibility into agent execution, helping debug issues and optimize performance.
+
+**Note**: Available from Branch 06 onwards.
+
+### 🐳 MongoDB (Conversation Persistence)
+
+**What it is**: NoSQL database for storing conversation history and checkpoints.
+
+**Setup**:
+1. **Install Docker**: Ensure Docker is installed on your system
+   - [Docker Desktop](https://www.docker.com/products/docker-desktop) (Mac/Windows)
+   - [Docker Engine](https://docs.docker.com/engine/install/) (Linux)
+
+2. **Use docker-compose**: MongoDB is pre-configured in `docker-compose.yaml`
+   ```bash
+   # Start MongoDB (and other services)
+   docker-compose up -d mongodb
+   
+   # Stop services
+   docker-compose down
+   ```
+
+3. **Connection string**: Already configured in `docker-compose.yaml`
+   ```yaml
+   mongodb:
+     image: mongo:7
+     ports:
+       - "27017:27017"
+   ```
+
+**Why we use it**: MongoDB provides flexible document storage for conversation history and LangGraph checkpoints.
+
+**Note**: Available from Branch 03 onwards.
+
+### 🔍 Qdrant (Vector Database)
+
+**What it is**: Vector database for semantic search and RAG (Retrieval Augmented Generation).
+
+**Setup**:
+1. **Docker image**: Qdrant runs as a Docker container (included in `docker-compose.yaml`)
+   ```bash
+   # Start Qdrant
+   docker-compose up -d qdrant
+   ```
+
+2. **Configuration** in `docker-compose.yaml`:
+   ```yaml
+   qdrant:
+     image: qdrant/qdrant:latest
+     ports:
+       - "6333:6333"
+     volumes:
+       - qdrant_storage:/qdrant/storage
+   ```
+
+3. **Access**: 
+   - API: `http://localhost:6333`
+   - Dashboard: `http://localhost:6333/dashboard`
+
+**Why we use it**: Qdrant enables semantic search over character knowledge, powering our RAG-based chat agents.
+
+**Note**: Available from Branch 05 onwards.
+
+### 🐳 Docker Quick Reference
+
+**Start all services**:
+```bash
+docker-compose up -d
+```
+
+**Check running services**:
+```bash
+docker-compose ps
+```
+
+**View logs**:
+```bash
+docker-compose logs -f
+```
+
+**Stop all services**:
+```bash
+docker-compose down
+```
+
+**Clean up (remove volumes)**:
+```bash
+docker-compose down -v
+```
+
+---
+
 ## Configuration & environment
 
 - Copy **`.env.example`** to **`.env`** and fill values for local dev (API keys, DB URLs, etc.).  
