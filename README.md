@@ -1,42 +1,39 @@
-# LEARN-AI-AGENTS — Branch `06_adding_traces_v2`
+# LEARN-AI-AGENTS — Branch `07_robust_system_v2`
 
-This branch adds **observability and tracing** to our RAG-powered character chat agents! We've evolved from functional agents to **production-ready agents** with full visibility into execution flow, tool usage, and performance metrics.
+This branch adds **robust error handling** and **retry mechanisms** to our AI agents! We've evolved from traced agents to **production-grade resilient agents** with comprehensive exception handling, automatic retries, and graceful degradation.
 
 **What's new in this branch:**
-- ✅ **Tracing Port**: Framework-agnostic tracing interface
-  - AgentTracingPort protocol for provider independence
-  - Easy to swap tracing providers (Opik, LangSmith, W&B)
-  - Clean separation between business logic and observability
-- ✅ **Opik Integration**: Production-grade observability platform
-  - OpikAgentTracerAdapter for automatic instrumentation
-  - Thread-based conversation grouping
-  - Real-time trace streaming
-  - Performance metrics and analytics
-- ✅ **Traced Agent**: Agent tracing use case with full observability
-  - TracingLangchainAgent with RAG capabilities
-  - Automatic LLM call tracking
-  - Tool invocation metrics
-  - State transition logging
-- ✅ **Helper Refactoring**: Extracted reusable LangChain utilities
-  - lc_message_to_domain() for message conversion
-  - safe_jsonable() for JSON serialization
-  - Tool call extraction helpers
-- ✅ **Docker Simplification**: Streamlined docker-compose setup
-  - Removed unnecessary network configuration
-  - Simplified service dependencies
+- ✅ **Exception Hierarchy**: Comprehensive domain exception system
+  - BusinessRuleException for domain violations
+  - ComponentException for infrastructure failures
+  - AgentException for agent-specific errors
+  - Clear error categorization and handling
+- ✅ **Retry Mechanisms**: Automatic retry with exponential backoff
+  - Configurable retry policies for LLM calls
+  - Tool call retry strategies
+  - Circuit breaker patterns
+- ✅ **Robust Agent**: Production-ready agent with enhanced error handling
+  - RobustLangchainAgent with retry capabilities
+  - Graceful error recovery
+  - Detailed error logging and tracing
+- ✅ **Exception Handlers**: FastAPI exception handlers for clean error responses
+  - HTTP-friendly error mapping
+  - Structured error responses
+  - Error context preservation
+- ✅ **Unit Tests**: Comprehensive test suite for robust agent
+  - Error scenario testing
+  - Retry mechanism validation
+  - Mock-based testing infrastructure
+- **From Branch 06:**
+  - ✅ **Tracing**: Opik integration for observability
+  - ✅ **Helper Utilities**: Reusable LangChain helpers
 - **From Branch 05:**
-  - ✅ **Vector Database**: Qdrant integration for semantic search
-  - ✅ **Embeddings**: Sentence transformers (all-MiniLM-L6-v2)
+  - ✅ **Vector Database**: Qdrant for RAG
   - ✅ **Content Indexer**: Complete RAG pipeline
-  - ✅ **Character Chat Agent**: RAG-powered conversations
-- **From Branch 04:**
-  - ✅ **Tools System**: External tool integration
-- **From Branch 03:**
-  - ✅ **Memory System**: MongoDB persistence
-- **From Branch 02:**
-  - ✅ **Streamlit Web UI**: Interactive chat interface
+- **From Earlier Branches:**
+  - ✅ **Tools, Memory, UI**: Complete agent infrastructure
 
-> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Qdrant** + **Opik** + **Groq** + **Streamlit**
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Qdrant** + **Opik** + **Groq** + **Pytest**
 
 ---
 
@@ -44,128 +41,172 @@ This branch adds **observability and tracing** to our RAG-powered character chat
 
 ### New Features
 
-#### 1. Tracing Port Architecture
-Framework-agnostic observability interface:
+#### 1. Exception Hierarchy
+Comprehensive domain exception system:
 
-**AgentTracingPort** (`application/outbound_ports/agents/tracing.py`):
+**Base Exceptions** (`domain/exceptions/_base.py`):
 ```python
-class AgentTracingPort(Protocol):
-    """Protocol for agent tracing implementations."""
-    
-    def get_tracer(self, thread_id: str) -> Any:
-        """Return the underlying framework-specific tracer object."""
-        ...
+class BusinessRuleException(Exception):
+    """Base exception for business rule violations."""
+    pass
+
+class ComponentException(Exception):
+    """Base exception for component failures."""
+    pass
 ```
 
-**Why this matters:**
-- ✅ Provider independence — Works with Opik, LangSmith, W&B, etc.
-- ✅ Testability — Easy to mock tracing for tests
-- ✅ Swappability — Change providers without touching use cases
-- ✅ Clear contracts — Explicit interface requirements
-
-#### 2. Opik Integration
-Production-grade tracing adapter:
-
-**OpikAgentTracerAdapter** (`infrastructure/outbound/tracing/opik.py`):
+**Agent Exceptions** (`domain/exceptions/agents.py`):
 ```python
-import opik
-from opik.integrations.langchain import OpikTracer
+class AgentExecutionException(BusinessRuleException):
+    """Raised when agent execution fails."""
+    pass
 
-class OpikAgentTracerAdapter(AgentTracingPort):
-    """Opik implementation of the AgentTracingPort."""
+class AgentConfigurationException(ComponentException):
+    """Raised when agent configuration is invalid."""
+    pass
+```
+
+**Component Exceptions** (`domain/exceptions/components.py`):
+```python
+class ComponentConnectionException(ComponentException):
+    """Raised when component connection fails."""
+    pass
+
+class ComponentOperationException(ComponentException):
+    """Raised when component operation fails."""
+    pass
+```
+
+#### 2. Retry Mechanisms
+Automatic retry with exponential backoff:
+
+**Retry Configuration** (`settings.yaml`):
+```yaml
+agents:
+  langchain:
+    robust:
+      config:
+        retry_policy:
+          llm_calls:
+            max_attempts: 3
+            backoff_multiplier: 2
+            initial_delay_ms: 100
+          tool_calls:
+            max_retries: 2
+            backoff_factor: 2
+            initial_delay: 1
+```
+
+**Model Retry Middleware** (`infrastructure/outbound/agents/langchain_fwk/middlewares/model_retry.py`):
+- Exponential backoff for failed LLM calls
+- Configurable max attempts
+- Detailed retry logging
+
+#### 3. Robust Agent
+Production-ready agent with enhanced error handling:
+
+**RobustLangchainAgent** (`infrastructure/outbound/agents/langchain_fwk/robust/`):
+```python
+class RobustLangchainAgent(BaseLangChainAgent):
+    """A robust agent with retry capabilities and error handling.
     
-    def __init__(self, api_key: str, workspace: str, project_name: str) -> None:
-        opik.configure(api_key=api_key, workspace=workspace)
-        self.project_name = project_name
-    
-    def get_tracer(self, thread_id: str) -> OpikTracer:
-        return OpikTracer(
-            project_name=self.project_name,
-            thread_id=thread_id
-        )
+    Features:
+    - Automatic retry for failed LLM calls
+    - Graceful error recovery
+    - Detailed error logging
+    - Circuit breaker patterns
+    """
 ```
 
 **Configuration** (`settings.yaml`):
 ```yaml
-tracing:
-  opik:
-    agent_tracer:
-      params:
-        api_key: ${OPIK_API_KEY}
-        workspace: ${OPIK_WORKSPACE}
-        project_name: ${OPIK_PROJECT_NAME}
-```
-
-**What gets traced:**
-- 🔍 LLM invocations with input/output tokens
-- 🛠️ Tool usage with arguments and results
-- 📊 State transitions in LangGraph
-- ⏱️ Performance metrics (latency, token usage)
-- 🔗 Conversation context via thread_id
-
-#### 3. Traced Agent with RAG
-Complete observability for character chat:
-
-**TracingLangchainAgent** (`infrastructure/outbound/agents/langchain_fwk/agent_tracing/`):
-- RAG-powered character chat with vector search
-- Automatic tracing of all operations
-- Thread-based conversation grouping
-- LangGraph state management
-- MongoDB checkpointing
-
-**Agent Configuration** (`settings.yaml`):
-```yaml
-agents:
-  langchain:
-    tracing_chat:
-      constructor:
-        module_class: ...agent_tracing.agent.TracingLangchainAgent
-        components:
-          llms:
-            default: llms.langchain.groq.default
-          tools:
-            vector_search: tools.langchain.vector_search.default
-          tracer: tracing.opik.agent_tracer.default
-        config:
-          enable_tracing: true
+robust:
+  info:
+    name: Robust Agent
+    description: Enhanced agent with retry and error handling
+  constructor:
+    module_class: ...robust.agent.RobustLangchainAgent
+    components:
+      llms:
+        default: llms.langchain.groq.default
+      tools:
+        vector_search: tools.langchain.vector_search.default
+      tracer: tracing.opik.agent_tracer.default
+    config:
+      enable_tracing: true
+      retry_policy:
+        llm_calls:
+          max_attempts: 3
 ```
 
 **Usage**:
 ```bash
-curl -X POST http://localhost:8000/06_agent_tracing/ainvoke \
+curl -X POST http://localhost:8000/07_robust/ainvoke \
   -H "Content-Type: application/json" \
   -d '{
     "message": "Tell me about Shadowheart",
     "character_name": "shadowheart",
     "config": {"conversation_id": "user123"}
   }'
-# All LLM calls, tool invocations traced automatically
-# View traces in Opik dashboard
+# Automatically retries on failures
+# Graceful error handling
+# Full tracing of retry attempts
 ```
 
-#### 4. Helper Refactoring
-Reusable LangChain utilities:
+#### 4. Exception Handlers
+FastAPI exception handlers for clean error responses:
 
-**helpers.py** enhancements:
-- `lc_message_to_domain()` - Convert LangChain messages to domain
-- `safe_jsonable()` - JSON serialization with error handling
-- `extract_tool_calls()` - Parse tool invocations
-- `to_lc_messages()` - Domain to LangChain conversion
-- `chunk_to_domain()` - Streaming chunk processing
+**Exception Handlers** (`infrastructure/inbound/exception_handlers.py`):
+```python
+@app.exception_handler(BusinessRuleException)
+async def business_rule_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "BusinessRuleViolation",
+            "message": str(exc)
+        }
+    )
 
-These helpers reduce code duplication across agents and improve maintainability.
+@app.exception_handler(ComponentException)
+async def component_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "ComponentFailure",
+            "message": str(exc)
+        }
+    )
+```
 
-#### 5. Docker Simplification
-Streamlined container orchestration:
+**Error Response Structure**:
+- 400 for business rule violations
+- 503 for component failures
+- Structured JSON with error type and message
 
-**docker-compose.yaml**:
-- Removed custom network configuration
-- Simplified service dependencies
-- Cleaner setup for MongoDB and Qdrant
+#### 5. Unit Tests
+Comprehensive test suite with mocking:
 
-### Previous Features (From Branches 02-05)
+**Test Structure** (`tests/unit/endpoints/test_robust_use_case/`):
+- `test_ainvoke_with_preloaded_data` - Success scenario
+- `test_ainvoke_with_api_connection_error` - LLM failure handling
+- `test_ainvoke_with_authentication_error` - Auth error handling
+- `test_ainvoke_with_qdrant_connection_error` - Vector DB failure handling
 
-#### Vector Database & RAG (Branch 05)
+**Test Data**:
+- Mock LLM responses
+- Mock vector search results
+- Expected error responses
+- Test settings configuration
+
+**Running Tests**:
+```bash
+pytest tests/unit/endpoints/test_robust_use_case/
+```
+
+### Previous Features (From Branches 02-06)
+
+#### Tracing & Observability (Branch 06)
 
 **LangChain Tool Adapters** (`infrastructure/outbound/tools/langchain_fwk/`):
 - **LangChainAgeCalculatorToolAdapter**: Wraps age calculator for LangChain
