@@ -1,10 +1,23 @@
-# learn_ai_agents — Code Documentation (Branch 05_vector_database_v2)
+# learn_ai_agents — Code Documentation (Branch 07_robust_system_v2)
 
 > This README explains the **code structure**, **component interactions**, and **implementation patterns** for this branch.
 
 ## 🆕 What's New in This Branch
 
-This branch adds:
+**Branch 07 adds:**
+1. **Exception Hierarchy**: Structured error handling with domain-specific exceptions
+2. **Retry Mechanisms**: Exponential backoff for resilient LLM and tool operations
+3. **Robust Agent**: Production-ready agent with error recovery and retry logic
+4. **Exception Handlers**: FastAPI middleware for clean HTTP error responses
+5. **Unit Tests**: Comprehensive test suite for error scenarios
+
+**Branch 06 added:**
+1. **Tracing System**: Agent observability with Opik integration
+2. **Agent Tracing**: Framework-agnostic tracing port and adapters
+3. **Thread-Based Tracking**: Traces span entire conversation threads
+4. **Middleware Utilities**: Helper functions for LangChain integration
+
+**Branch 05 added:**
 1. **Vector Database System**: Qdrant integration for semantic search
 2. **Embeddings System**: Sentence transformers for text vectorization (all-MiniLM-L6-v2)
 3. **Content Indexer**: Complete RAG pipeline (source ingestion, document splitting, vectorization)
@@ -12,9 +25,11 @@ This branch adds:
 5. **Vector Search Tool**: LangChain adapter for Qdrant similarity search
 6. **MongoDB Repositories**: Document and chunk storage for RAG pipeline
 7. **Content Indexer Use Cases**: Three-step workflow (ingest, split, vectorize)
-8. **Tools System**: External tool integration (from Branch 04)
-9. **Memory System**: MongoDB-backed conversation persistence (from Branch 03)
-10. **Streamlit UI**: Web interface (from Branch 02)
+
+**Previous branches:**
+- **Branch 04**: Tools System - External tool integration
+- **Branch 03**: Memory System - MongoDB-backed conversation persistence
+- **Branch 02**: Streamlit UI - Web interface
 
 ---
 
@@ -1293,6 +1308,633 @@ The container automatically:
 
 ---
 
+## 🔭 Branch 06: Tracing and Observability
+
+### Overview
+
+Branch 06 adds production-grade observability through the Opik tracing platform, enabling full visibility into agent execution, LLM calls, and tool usage.
+
+### Architecture
+
+#### 1. Tracing Port (`application/outbound_ports/agents/tracing.py`)
+
+Framework-agnostic interface for tracing:
+
+```python
+from typing import Protocol
+
+class AgentTracingPort(Protocol):
+    """Port for agent execution tracing."""
+    
+    def start_trace(self, *, project_name: str, trace_name: str) -> str:
+        """Initialize a new trace and return trace ID."""
+        ...
+    
+    def end_trace(self, trace_id: str, *, output: dict | None = None) -> None:
+        """Finalize a trace with optional output."""
+        ...
+    
+    def get_langchain_callback_handler(self, trace_id: str):
+        """Get LangChain callback handler for this trace."""
+        ...
+```
+
+**Why this design?**
+- Decouples tracing logic from infrastructure
+- Allows swapping Opik for other observability platforms (DataDog, LangSmith, etc.)
+- Testable with mock implementations
+
+#### 2. Opik Adapter (`infrastructure/outbound/tracing/opik.py`)
+
+Concrete implementation using Opik SDK:
+
+```python
+from opik import track, opik_context
+from opik.integrations.langchain import OpikTracer
+
+class OpikAgentTracerAdapter(AgentTracingPort):
+    """Opik-based tracing implementation."""
+    
+    def __init__(self, config: dict):
+        self.project_name = config.get("project_name", "ai-agents")
+        self._traces: dict[str, dict] = {}  # Thread-safe trace storage
+    
+    def start_trace(self, *, project_name: str, trace_name: str) -> str:
+        """Start Opik trace and store context."""
+        trace_id = Helper.generate_uuid()
+        
+        # Initialize Opik trace
+        trace_data = opik_context.get_current_trace_data()
+        
+        self._traces[trace_id] = {
+            "project_name": project_name,
+            "trace_name": trace_name,
+            "trace_data": trace_data,
+        }
+        
+        return trace_id
+    
+    def get_langchain_callback_handler(self, trace_id: str):
+        """Create OpikTracer with trace context."""
+        trace_info = self._traces.get(trace_id)
+        if not trace_info:
+            raise ValueError(f"No trace found for ID: {trace_id}")
+        
+        return OpikTracer(
+            project_name=trace_info["project_name"],
+            tags=["langchain", "agent"],
+        )
+```
+
+**Key features:**
+- Thread-based trace management (supports concurrent requests)
+- LangChain integration via `OpikTracer` callback handler
+- Automatic span creation for LLM calls, tool invocations, and agent steps
+
+#### 3. Tracing Agent (`infrastructure/outbound/agents/langchain_fwk/agent_tracing/`)
+
+LangGraph agent with full tracing integration:
+
+**Agent** (`agent.py`):
+```python
+class TracingLangchainAgent(BaseLangChainAgent):
+    """Agent with Opik tracing capabilities."""
+    
+    def __init__(
+        self,
+        *,
+        config: dict,
+        llms: dict[str, ChatModelProvider],
+        tracing: AgentTracingPort,  # Tracing port injected
+        chat_history_persistence: ChatHistoryStorePort | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
+    ):
+        self.tracing = tracing
+        self.checkpointer = checkpointer
+        super().__init__(
+            config=config,
+            llms=llms,
+            chat_history_persistence=chat_history_persistence,
+        )
+    
+    async def ainvoke(
+        self,
+        new_message: Message,
+        config: Config,
+        **kwargs,
+    ) -> Message:
+        """Execute agent with tracing enabled."""
+        # Start trace
+        trace_id = self.tracing.start_trace(
+            project_name=config.tracing_project_name or "ai-agents",
+            trace_name=f"agent_tracing_{config.thread_id}",
+        )
+        
+        try:
+            # Get LangChain callback handler
+            opik_tracer = self.tracing.get_langchain_callback_handler(trace_id)
+            
+            # Add tracer to LangGraph config
+            langchain_config = {
+                "configurable": {
+                    "thread_id": config.thread_id,
+                    "llm": self.llms["default"].get_model(),
+                },
+                "callbacks": [opik_tracer],  # Enable tracing
+            }
+            
+            # Execute graph
+            response = await self.graph.ainvoke(
+                {"messages": [lc_message]},
+                config=langchain_config,
+            )
+            
+            # End trace with success
+            self.tracing.end_trace(
+                trace_id,
+                output={"response": response["messages"][-1].content}
+            )
+            
+            return domain_response
+            
+        except Exception as e:
+            # End trace with error
+            self.tracing.end_trace(trace_id, output={"error": str(e)})
+            raise
+```
+
+**What gets traced:**
+- **Agent execution**: Complete conversation flow
+- **LLM calls**: Prompts, responses, token usage
+- **Graph nodes**: Entry/exit for each state transition
+- **Errors**: Exception details and stack traces
+
+#### 4. Helper Utilities (`infrastructure/outbound/agents/langchain_fwk/helpers.py`)
+
+Reusable conversion functions:
+
+```python
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from learn_ai_agents.domain.models.agents.messages import Message, Role
+
+def lc_message_to_domain(lc_message: BaseMessage) -> Message:
+    """Convert LangChain message to domain Message."""
+    role_mapping = {
+        "human": Role.USER,
+        "ai": Role.ASSISTANT,
+        "system": Role.SYSTEM,
+    }
+    
+    return Message(
+        role=role_mapping.get(lc_message.type, Role.USER),
+        content=lc_message.content,
+        timestamp=Helper.generate_timestamp(),
+    )
+
+def domain_message_to_lc(message: Message) -> BaseMessage:
+    """Convert domain Message to LangChain message."""
+    message_classes = {
+        Role.USER: HumanMessage,
+        Role.ASSISTANT: AIMessage,
+        Role.SYSTEM: SystemMessage,
+    }
+    
+    message_class = message_classes.get(message.role, HumanMessage)
+    return message_class(content=message.content)
+
+def safe_jsonable(obj: Any) -> Any:
+    """Convert objects to JSON-serializable format."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    elif isinstance(obj, dict):
+        return {k: safe_jsonable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [safe_jsonable(item) for item in obj]
+    else:
+        return obj
+```
+
+### Configuration
+
+```yaml
+# settings.yaml
+components:
+  tracing:
+    opik:
+      agent_tracer:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.tracing.opik.OpikAgentTracerAdapter
+          config:
+            project_name: learn-ai-agents
+
+agents:
+  langchain:
+    tracing_chat:
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.agent_tracing.agent.TracingLangchainAgent
+        components:
+          llms:
+            default: llms.langchain.groq.default
+          tracing: tracing.opik.agent_tracer  # Inject tracing
+          checkpointer: checkpointers.memory_checkpointer
+
+use_cases:
+  agent_tracing:
+    info:
+      path_prefix: /06_agent_tracing
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.agent_tracing:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.agent_tracing.use_case.AgentTracingUseCase
+      components:
+        agents:
+          agent: agents.langchain.tracing_chat
+```
+
+### Observability Benefits
+
+1. **Performance Monitoring**: Track LLM latency and token usage
+2. **Debugging**: See exact prompts sent to LLMs and responses received
+3. **Error Tracking**: Capture exceptions with full context
+4. **Cost Analysis**: Monitor token consumption per conversation
+5. **Conversation Analytics**: Understand user interaction patterns
+
+### Opik Dashboard
+
+Access the Opik UI to view:
+- Trace timelines with nested spans
+- LLM call details (model, temperature, tokens)
+- Tool execution logs
+- Error rates and latency metrics
+
+---
+
+## 🛡️ Branch 07: Robust Error Handling
+
+### Overview
+
+Branch 07 implements production-grade error handling with structured exceptions, retry mechanisms, and graceful degradation.
+
+### Exception Hierarchy
+
+#### Base Exception (`domain/exceptions/_base.py`)
+
+```python
+class BaseApplicationException(Exception):
+    """Root exception for all application errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str | None = None,
+        details: dict | None = None,
+        original_exception: Exception | None = None,
+    ):
+        self.message = message
+        self.error_code = error_code or self.__class__.__name__
+        self.details = details or {}
+        self.original_exception = original_exception
+        super().__init__(message)
+    
+    def to_dict(self) -> dict:
+        """Convert exception to JSON-serializable dict."""
+        return {
+            "error_code": self.error_code,
+            "message": self.message,
+            "details": self.details,
+        }
+```
+
+#### Domain Exceptions (`domain/exceptions/domain.py`)
+
+Business rule violations:
+
+```python
+class BusinessRuleException(BaseApplicationException):
+    """Raised when business rules are violated."""
+    pass
+
+class ValidationException(BusinessRuleException):
+    """Invalid input data."""
+    pass
+
+class AuthorizationException(BusinessRuleException):
+    """User not authorized for operation."""
+    pass
+```
+
+#### Component Exceptions (`domain/exceptions/components.py`)
+
+Infrastructure failures:
+
+```python
+class ComponentException(BaseApplicationException):
+    """External component failure."""
+    pass
+
+class DatabaseException(ComponentException):
+    """Database operation failed."""
+    pass
+
+class LLMException(ComponentException):
+    """LLM service error."""
+    pass
+
+class VectorDatabaseException(ComponentException):
+    """Vector database error."""
+    pass
+```
+
+#### Agent Exceptions (`domain/exceptions/agents.py`)
+
+Agent-specific errors:
+
+```python
+class AgentException(BaseApplicationException):
+    """Agent execution error."""
+    pass
+
+class AgentExecutionException(AgentException):
+    """Agent failed during execution."""
+    pass
+
+class ToolExecutionException(AgentException):
+    """Tool call failed."""
+    pass
+```
+
+### Retry Mechanisms
+
+#### Configuration (`settings.yaml`)
+
+```yaml
+agents:
+  langchain:
+    robust:
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.robust.agent.RobustLangchainAgent
+        components:
+          llms:
+            default: llms.langchain.groq.default
+          checkpointer: checkpointers.mongo_checkpointer
+        config:
+          system_prompt: "You are a helpful assistant."
+          retry_policy:
+            max_attempts: 3
+            backoff_multiplier: 2.0
+            initial_delay: 1.0
+            max_delay: 10.0
+```
+
+#### Robust Agent (`infrastructure/outbound/agents/langchain_fwk/robust/agent.py`)
+
+```python
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
+
+class RobustLangchainAgent(BaseLangChainAgent):
+    """Agent with retry logic and error recovery."""
+    
+    def __init__(
+        self,
+        *,
+        config: dict,
+        llms: dict[str, ChatModelProvider],
+        checkpointer: BaseCheckpointSaver | None = None,
+        chat_history_persistence: ChatHistoryStorePort | None = None,
+    ):
+        self.retry_policy = config.get("retry_policy", {})
+        self.checkpointer = checkpointer
+        super().__init__(
+            config=config,
+            llms=llms,
+            chat_history_persistence=chat_history_persistence,
+        )
+    
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2.0, min=1, max=10),
+        retry=retry_if_exception_type((LLMException, ComponentException)),
+        reraise=True,
+    )
+    async def _invoke_with_retry(self, state: dict, config: RunnableConfig) -> dict:
+        """Execute LLM with automatic retry on transient failures."""
+        try:
+            return await self.graph.ainvoke(state, config=config)
+        except Exception as e:
+            # Wrap in appropriate exception type
+            if "rate_limit" in str(e).lower():
+                raise LLMException(
+                    "LLM rate limit exceeded",
+                    error_code="RATE_LIMIT_ERROR",
+                    original_exception=e,
+                )
+            elif "timeout" in str(e).lower():
+                raise ComponentException(
+                    "LLM request timed out",
+                    error_code="TIMEOUT_ERROR",
+                    original_exception=e,
+                )
+            else:
+                raise AgentExecutionException(
+                    f"Agent execution failed: {str(e)}",
+                    original_exception=e,
+                )
+    
+    async def ainvoke(
+        self,
+        new_message: Message,
+        config: Config,
+        **kwargs,
+    ) -> Message:
+        """Execute agent with error handling and retry logic."""
+        try:
+            # Prepare state
+            lc_message = domain_message_to_lc(new_message)
+            state = {"messages": [lc_message]}
+            
+            # Execute with retry
+            response = await self._invoke_with_retry(state, langchain_config)
+            
+            # Convert response
+            return lc_message_to_domain(response["messages"][-1])
+            
+        except LLMException as e:
+            # LLM-specific error handling
+            logger.error(f"LLM error after retries: {e.message}")
+            raise
+        except ComponentException as e:
+            # Infrastructure error handling
+            logger.error(f"Component error: {e.message}")
+            raise
+        except Exception as e:
+            # Unexpected errors
+            logger.exception("Unexpected error in robust agent")
+            raise AgentExecutionException(
+                "Unexpected error during execution",
+                original_exception=e,
+            )
+```
+
+**Retry behavior:**
+1. **Attempt 1**: Immediate execution
+2. **Attempt 2**: Wait 1 second (initial_delay)
+3. **Attempt 3**: Wait 2 seconds (backoff_multiplier × previous delay)
+4. **After max_attempts**: Raise exception
+
+**Retryable errors:**
+- Rate limit errors (429 status)
+- Timeout errors
+- Temporary connection failures
+- Transient API errors
+
+**Non-retryable errors:**
+- Validation errors (400)
+- Authentication errors (401, 403)
+- Not found errors (404)
+- Permanent failures
+
+### Exception Handlers
+
+#### FastAPI Exception Handlers (`infrastructure/inbound/exception_handlers.py`)
+
+```python
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+
+async def business_rule_exception_handler(
+    request: Request, exc: BusinessRuleException
+) -> JSONResponse:
+    """Handle business rule violations."""
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content=exc.to_dict(),
+    )
+
+async def component_exception_handler(
+    request: Request, exc: ComponentException
+) -> JSONResponse:
+    """Handle external component failures."""
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=exc.to_dict(),
+    )
+
+async def agent_exception_handler(
+    request: Request, exc: AgentException
+) -> JSONResponse:
+    """Handle agent execution errors."""
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=exc.to_dict(),
+    )
+
+# Register handlers in app_factory.py
+app.add_exception_handler(BusinessRuleException, business_rule_exception_handler)
+app.add_exception_handler(ComponentException, component_exception_handler)
+app.add_exception_handler(AgentException, agent_exception_handler)
+```
+
+**HTTP status code mapping:**
+- `BusinessRuleException` → 400 Bad Request
+- `ValidationException` → 400 Bad Request
+- `AuthorizationException` → 403 Forbidden
+- `ComponentException` → 503 Service Unavailable
+- `AgentException` → 500 Internal Server Error
+
+### Unit Tests
+
+#### Test Structure (`tests/unit/endpoints/test_robust_use_case/`)
+
+```python
+import pytest
+from unittest.mock import AsyncMock, patch
+
+class TestRobustUseCase:
+    """Test robust agent error handling."""
+    
+    @pytest.mark.asyncio
+    async def test_ainvoke_with_preloaded_data(self, use_case):
+        """Test successful execution."""
+        cmd = AnswerRequestDTO(
+            message="What is the capital of France?",
+            config=ConfigDTO(thread_id="test-123"),
+        )
+        
+        result = await use_case.ainvoke(cmd)
+        
+        assert result.answer == "The capital of France is Paris."
+        assert result.config.thread_id == "test-123"
+    
+    @pytest.mark.asyncio
+    async def test_ainvoke_with_api_connection_error(self, use_case, agent_mock):
+        """Test LLM connection failure with retry."""
+        # Simulate LLM failure
+        agent_mock.ainvoke.side_effect = LLMException(
+            "Connection timeout",
+            error_code="TIMEOUT_ERROR",
+        )
+        
+        cmd = AnswerRequestDTO(
+            message="Test message",
+            config=ConfigDTO(thread_id="test-error"),
+        )
+        
+        with pytest.raises(LLMException) as exc_info:
+            await use_case.ainvoke(cmd)
+        
+        assert exc_info.value.error_code == "TIMEOUT_ERROR"
+        # Verify retry attempts
+        assert agent_mock.ainvoke.call_count == 3
+    
+    @pytest.mark.asyncio
+    async def test_ainvoke_with_authentication_error(self, use_case, agent_mock):
+        """Test authentication failure (non-retryable)."""
+        agent_mock.ainvoke.side_effect = BusinessRuleException(
+            "Invalid API key",
+            error_code="AUTH_ERROR",
+        )
+        
+        cmd = AnswerRequestDTO(
+            message="Test",
+            config=ConfigDTO(thread_id="test-auth"),
+        )
+        
+        with pytest.raises(BusinessRuleException) as exc_info:
+            await use_case.ainvoke(cmd)
+        
+        assert exc_info.value.error_code == "AUTH_ERROR"
+        # No retry for auth errors
+        assert agent_mock.ainvoke.call_count == 1
+```
+
+#### Running Tests
+
+```bash
+# Run all robust tests
+pytest tests/unit/endpoints/test_robust_use_case/
+
+# Run specific test
+pytest tests/unit/endpoints/test_robust_use_case/test_use_case.py::TestRobustUseCase::test_ainvoke_with_api_connection_error
+
+# Run with coverage
+pytest --cov=learn_ai_agents.application.use_cases.agents.robust tests/unit/endpoints/test_robust_use_case/
+```
+
+### Production Benefits
+
+1. **Resilience**: Automatic retry for transient failures
+2. **Observability**: Structured error logging with context
+3. **User Experience**: Clean error messages for clients
+4. **Debugging**: Full exception chains with original errors
+5. **Monitoring**: Error categorization for metrics and alerts
+
+---
+
 ## 🎯 Key Takeaways
 
 1. **Domain is king**: Start here, keep it pure
@@ -1302,22 +1944,15 @@ The container automatically:
 5. **Test each layer**: Unit → Integration → E2E
 6. **Discovery enables introspection**: Runtime visibility into system configuration
 7. **Containers manage lifecycle**: Lazy loading, proper initialization, clean shutdown
+8. **Tracing enables observability**: Full visibility into agent execution
+9. **Exceptions enable resilience**: Structured error handling and retry logic
 
 This architecture makes the code:
 - ✅ Testable (mock any dependency)
 - ✅ Maintainable (clear separation)
 - ✅ Flexible (swap implementations)
 - ✅ Scalable (add features without breaking existing code)
-- ✅ Observable (discovery system provides runtime visibility)
+- ✅ Observable (tracing and discovery provide runtime visibility)
+- ✅ Resilient (retry mechanisms and error recovery)
+- ✅ Production-ready (comprehensive error handling)
 - ✅ User-friendly (Streamlit UI for exploration and testing)
-
----
-
-## 🚀 Next Steps (Branch 03)
-
-The next branch will add:
-- **Conversation Memory**: MongoDB-based persistence
-- **Agent with Memory**: LangGraph agent using checkpointing
-- **New Use Case**: `adding_memory` demonstrating stateful conversations
-- **Chat History**: Database adapters and repositories
-- **Checkpointers**: MongoDB and in-memory checkpointing implementations
