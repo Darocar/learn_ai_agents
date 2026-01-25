@@ -292,7 +292,7 @@ use_cases:
         vector_store:
           vector_store: vector_store_repository.qdrant.store.default
       config: {}
-  agent_tracer:
+  agent_tracing:
     info:
       name: Character Chat Use Case with Tracing
       description: A use case for chatting with BG3 characters using RAG and vector search with tracing.
