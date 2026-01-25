@@ -1,0 +1,90 @@
+components:
+  llms:
+    langchain:
+      groq:
+        constructor:
+          module_class: tests.common.fake_llm_adapter.FakeChatModelProvider
+        instances:
+          default:
+            params: {}
+
+  vector_store_repository:
+    qdrant:
+      store:
+        constructor:
+          module_class: tests.common.fake_vector_store.FakeVectorStoreAdapter
+        instances:
+          default:
+            params: {}
+
+  embedders:
+    sentence_transformers:
+      all_minilm_l6_v2:
+        constructor:
+          module_class: tests.common.fake_embedder.FakeEmbedder
+        instances:
+          default:
+            params: {}
+
+  tools:
+    langchain:
+      vector_search:
+        constructor:
+          module_class: learn_ai_agents.infrastructure.outbound.tools.langchain_fwk.vector_search.LangChainVectorSearchToolAdapter
+        instances:
+          default:
+            params:
+              embedder_ref: embedders.sentence_transformers.all_minilm_l6_v2.default
+              vector_store_ref: vector_store_repository.qdrant.store.default
+
+agents:
+  langchain:
+    robust:
+      info:
+        name: Robust Agent
+        description: A robust agent with enhanced tracing and monitoring capabilities for chatting as a BG3 character using RAG.
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.robust.agent.RobustLangchainAgent
+        components:
+          llms:
+            default: llms.langchain.groq.default
+          tools:
+            vector_search: tools.langchain.vector_search.default
+          chat_history_persistence: null
+          checkpointer: null
+          tracer: null
+        config:
+          enable_checkpointing: true
+          enable_tracing: true
+          retry_policy:
+            llm_calls:
+              max_attempts: 3
+              backoff_multiplier: 2
+              initial_delay_ms: 100
+            tool_calls:
+              max_retries: 2
+              backoff_factor: 2
+              initial_delay: 1
+              on_failure: raise  # Raise exception instead of returning message
+              tools: null  # Apply to all tools
+
+use_cases:
+  robust:
+    info:
+      name: Robust Character Chat Use Case
+      description: A robust use case for chatting with BG3 characters using RAG with enhanced error handling and monitoring.
+      path_prefix: /07_robust
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.robust:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.robust.use_case.RobustUseCase
+      components:
+        agents:
+          agent: agents.langchain.robust
+        vector_store:
+          vector_store: vector_store_repository.qdrant.store.default
+      config:
+        # Example configuration options for use cases
+        retry_policy:
+          max_attempts: 3
+          backoff_multiplier: 2
+          initial_delay_ms: 100

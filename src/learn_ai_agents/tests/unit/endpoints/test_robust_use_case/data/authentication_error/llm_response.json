@@ -1,0 +1,23 @@
+[
+    {
+        "__error__": {
+            "type": "AuthenticationError",
+            "status_code": 401,
+            "message": "Simulated 401: Invalid API key provided (Attempt 1)"
+        }
+    },
+    {
+        "__error__": {
+            "type": "AuthenticationError",
+            "status_code": 401,
+            "message": "Simulated 401: Invalid API key provided (Attempt 2)"
+        }
+    },
+    {
+        "__error__": {
+            "type": "AuthenticationError",
+            "status_code": 401,
+            "message": "Simulated 401: Invalid API key provided (Attempt 3)"
+        }
+    }
+]

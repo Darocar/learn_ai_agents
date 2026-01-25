@@ -20,6 +20,9 @@ from learn_ai_agents.application.use_cases.agents.agent_tracing.use_case import 
 from learn_ai_agents.application.use_cases.agents.character_chat.use_case import (
     CharacterChatUseCase,
 )
+from learn_ai_agents.application.use_cases.agents.robust.use_case import (
+    RobustUseCase,
+)
 from learn_ai_agents.application.use_cases.content_indexer.source_ingestion import (
     SourceIngestionUseCase,
 )
@@ -108,6 +111,21 @@ def get_agent_tracing_use_case(request: Request) -> AgentTracingUseCase:
     """
     container = request.app.state.container
     return container.use_cases.get("agent_tracing")
+
+
+def get_robust_use_case(request: Request) -> RobustUseCase:
+    """Get the Robust Agent use case instance.
+
+    This dependency retrieves the RobustUseCase from the application container.
+
+    Args:
+        request: FastAPI request object containing the app state.
+
+    Returns:
+        RobustUseCase instance.
+    """
+    container = request.app.state.container
+    return container.use_cases.get("robust")
 
 
 def get_source_ingestion_use_case(request: Request) -> SourceIngestionUseCase:

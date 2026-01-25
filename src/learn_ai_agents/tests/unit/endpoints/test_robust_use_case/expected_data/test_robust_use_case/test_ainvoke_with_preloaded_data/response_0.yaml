@@ -1,0 +1,27 @@
+conversation_id: test-conv-001
+message:
+  role: assistant
+  content: Ah, my background... *smirks* Well, darling, I wasn't always the charming
+    vampire you see before you.
+character_name: Astarion
+tool_calls:
+- name: vector_search
+  args:
+    query: Tell me about your background and past
+  output: '[Result 1] (Character: Astarion)
+
+    # Overview
+
+
+    ## Background
+
+
+    Astarion prowled the night as a vampire spawn for two centuries in Baldur''s Gate,
+    enslaved by a sadistic vampire lord named Cazador Szarr until he was abducted
+    by mind flayers on the Nautiloid. Although living on borrowed time due to being
+    tadpoled, he now can walk in sunlight, wade through water, enter homes uninvited,
+    and resist his master''s compulsions. Astarion has a chance at a new life where
+    he can make his own choices, and possibly gain the freedom and safety he previously
+    dared not even hope for.
+
+    '

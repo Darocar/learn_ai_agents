@@ -240,6 +240,32 @@ agents:
           checkpoints_collection: checkpoints
           enable_checkpointing: true
           enable_tracing: true
+    robust:
+      info:
+        name: Robust Agent
+        description: A robust agent with enhanced tracing and monitoring capabilities for chatting as a BG3 character using RAG.
+      constructor:
+        module_class: learn_ai_agents.infrastructure.outbound.agents.langchain_fwk.robust.agent.RobustLangchainAgent
+        components:
+          llms: 
+            default: llms.langchain.groq.default
+          tools:
+            vector_search: tools.langchain.vector_search.default
+          chat_history_persistence: chat_history_persistence.mongo.store.default
+          checkpointer: checkpointer.mongo.saver.default
+          tracer: tracing.opik.agent_tracer.default
+        config:
+          enable_checkpointing: true
+          enable_tracing: true
+          retry_policy:
+            llm_calls:
+              max_attempts: 3
+              backoff_multiplier: 2
+              initial_delay_ms: 100
+            tool_calls:
+              max_retries: 2
+              backoff_factor: 2
+              initial_delay: 1
 
 use_cases:
   basic_answer:
@@ -306,6 +332,24 @@ use_cases:
         vector_store:
           vector_store: vector_store_repository.qdrant.store.default
       config: {}
+  robust:
+    info:
+      name: Robust Character Chat Use Case
+      description: A robust use case for chatting with BG3 characters using RAG with enhanced error handling and monitoring.
+      path_prefix: /07_robust
+      router_factory: learn_ai_agents.infrastructure.inbound.controllers.agents.robust:get_router
+    constructor:
+      module_class: learn_ai_agents.application.use_cases.agents.robust.use_case.RobustUseCase
+      components:
+        agents:
+          agent: agents.langchain.robust
+        vector_store:
+          vector_store: vector_store_repository.qdrant.store.default
+      config:
+        retry_policy:
+          max_attempts: 3
+          backoff_multiplier: 2
+          initial_delay_ms: 100
   source_ingestion:
     info:
       name: Retrieve Content Use Case

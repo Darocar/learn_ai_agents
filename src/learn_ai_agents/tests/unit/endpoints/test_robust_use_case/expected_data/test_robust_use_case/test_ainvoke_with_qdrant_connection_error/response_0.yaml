@@ -1,0 +1,10 @@
+error:
+  type: AgentExecutionError
+  message: 'Simulated Qdrant connection error: Could not connect to database'
+  details:
+    agent_component: component:vector_store
+    agent_class: RobustLangchainAgent
+    error: 'Simulated Qdrant connection error: Could not connect to database'
+    llm_model: FakeChatModel()
+    input_message: Tell me about your background and past
+    component_type: vector_store

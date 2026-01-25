@@ -1,0 +1,20 @@
+[
+    {
+        "__error__": {
+            "type": "APIConnectionError",
+            "message": "Simulated network failure: Could not reach Groq API server (Attempt 1)"
+        }
+    },
+    {
+        "__error__": {
+            "type": "APIConnectionError",
+            "message": "Simulated network failure: Could not reach Groq API server (Attempt 2)"
+        }
+    },
+    {
+        "__error__": {
+            "type": "APIConnectionError",
+            "message": "Simulated network failure: Could not reach Groq API server (Attempt 3)"
+        }
+    }
+]

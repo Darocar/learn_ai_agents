@@ -1,0 +1,9 @@
+error:
+  type: AgentExecutionError
+  message: Maximum retry attempts reached for model call.
+  details:
+    agent_component: llm
+    middleware: ModelRetryMiddleware
+    attempts: 3
+    error: 'Simulated network failure: Could not reach Groq API server (Attempt 3)'
+    llm_model: FakeChatModel()
