@@ -1,39 +1,35 @@
-# LEARN-AI-AGENTS — Branch `07_robust_system_v2`
+# LEARN-AI-AGENTS — Branch `08_llm_evaluation_v2`
 
-This branch adds **robust error handling** and **retry mechanisms** to our AI agents! We've evolved from traced agents to **production-grade resilient agents** with comprehensive exception handling, automatic retries, and graceful degradation.
+This branch adds **LLM evaluation** with **RAGAS** metrics! We've evolved from robust, resilient agents to **measurable and continuously improving agents** with automated quality assessment of RAG systems.
 
 **What's new in this branch:**
-- ✅ **Exception Hierarchy**: Comprehensive domain exception system
-  - BusinessRuleException for domain violations
-  - ComponentException for infrastructure failures
-  - AgentException for agent-specific errors
-  - Clear error categorization and handling
-- ✅ **Retry Mechanisms**: Automatic retry with exponential backoff
-  - Configurable retry policies for LLM calls
-  - Tool call retry strategies
-  - Circuit breaker patterns
-- ✅ **Robust Agent**: Production-ready agent with enhanced error handling
-  - RobustLangchainAgent with retry capabilities
-  - Graceful error recovery
-  - Detailed error logging and tracing
-- ✅ **Exception Handlers**: FastAPI exception handlers for clean error responses
-  - HTTP-friendly error mapping
-  - Structured error responses
-  - Error context preservation
-- ✅ **Unit Tests**: Comprehensive test suite for robust agent
-  - Error scenario testing
-  - Retry mechanism validation
-  - Mock-based testing infrastructure
+- ✅ **RAGAS Integration**: Industry-standard RAG evaluation metrics
+  - Context Precision: Measures relevance of retrieved context
+  - Faithfulness: Ensures generated answers are grounded in context
+  - Async evaluation for production workloads
+- ✅ **Evaluation Datasets**: Real conversation samples for testing
+  - Character conversation datasets (Astarion, Gale from BG3)
+  - JSON format with user inputs, references, and retrieved contexts
+  - Extensible dataset structure
+- ✅ **Evaluation Script**: Automated evaluation workflow
+  - Batch processing of multiple datasets
+  - Results saved in JSON format
+  - Summary statistics and reporting
+- ✅ **Groq LLM Support**: Using Llama 3.3 70B for evaluation
+  - OpenAI-compatible API interface
+  - Async evaluation for scalability
+- **From Branch 07:**
+  - ✅ **Exception Hierarchy**: Comprehensive error handling
+  - ✅ **Retry Mechanisms**: Production-grade resilience
 - **From Branch 06:**
   - ✅ **Tracing**: Opik integration for observability
-  - ✅ **Helper Utilities**: Reusable LangChain helpers
 - **From Branch 05:**
   - ✅ **Vector Database**: Qdrant for RAG
   - ✅ **Content Indexer**: Complete RAG pipeline
 - **From Earlier Branches:**
   - ✅ **Tools, Memory, UI**: Complete agent infrastructure
 
-> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Qdrant** + **Opik** + **Groq** + **Pytest**
+> Stack: **Python 3.12** + **uv** + **FastAPI** + **LangChain** + **LangGraph** + **MongoDB** + **Qdrant** + **Opik** + **RAGAS** + **Groq** + **Pytest**
 
 ---
 
@@ -41,63 +37,79 @@ This branch adds **robust error handling** and **retry mechanisms** to our AI ag
 
 ### New Features
 
-#### 1. Exception Hierarchy
-Comprehensive domain exception system:
+#### 1. RAGAS Evaluation Metrics
+Industry-standard metrics for RAG systems:
 
-**Base Exceptions** (`domain/exceptions/_base.py`):
+**Context Precision**:
+Measures how relevant the retrieved contexts are to the user's question. Higher scores indicate better retrieval quality.
+
+**Faithfulness**:
+Measures whether the generated response is grounded in the retrieved contexts. Higher scores indicate less hallucination.
+
+**Usage** (`scripts/llm_evaluation/evaluate_ragas.py`):
 ```python
-class BusinessRuleException(Exception):
-    """Base exception for business rule violations."""
-    pass
+from ragas.metrics.collections import ContextPrecision, Faithfulness
 
-class ComponentException(Exception):
-    """Base exception for component failures."""
-    pass
+# Initialize metrics
+context_precision = ContextPrecision(llm=llm)
+faithfulness = Faithfulness(llm=llm)
+
+# Evaluate
+precision_score = await context_precision.ascore(
+    user_input="What are your abilities?",
+    reference="Expected answer...",
+    retrieved_contexts=["Context 1", "Context 2"]
+)
+
+faithfulness_score = await faithfulness.ascore(
+    user_input="What are your abilities?",
+    response="Agent response...",
+    retrieved_contexts=["Context 1", "Context 2"]
+)
 ```
 
-**Agent Exceptions** (`domain/exceptions/agents.py`):
-```python
-class AgentExecutionException(BusinessRuleException):
-    """Raised when agent execution fails."""
-    pass
+#### 2. Evaluation Datasets
+Structured datasets for testing RAG quality:
 
-class AgentConfigurationException(ComponentException):
-    """Raised when agent configuration is invalid."""
-    pass
+**Dataset Format** (`data/llm_evaluation/datasets/astarion_conversation_01.json`):
+```json
+{
+    "user_input": "What are your abilities?",
+    "reference": "Expected answer from the character...",
+    "retrieved_contexts": [
+        "Context retrieved from vector store...",
+        "Additional relevant context..."
+    ]
+}
 ```
 
-**Component Exceptions** (`domain/exceptions/components.py`):
-```python
-class ComponentConnectionException(ComponentException):
-    """Raised when component connection fails."""
-    pass
+**Current Datasets**:
+- `astarion_conversation_01.json`: Testing Astarion character knowledge
+- `gale_conversation_03.json`: Testing Gale character knowledge
 
-class ComponentOperationException(ComponentException):
-    """Raised when component operation fails."""
-    pass
+#### 3. Automated Evaluation Workflow
+Complete evaluation pipeline:
+
+**Run Evaluation**:
+```bash
+cd src/learn_ai_agents
+uv run python scripts/llm_evaluation/evaluate_ragas.py
 ```
 
-#### 2. Retry Mechanisms
-Automatic retry with exponential backoff:
+**Output**:
+- Console summary with metric scores
+- JSON results file: `data/llm_evaluation/results/ragas_evaluation_results.json`
+- Per-dataset breakdown of metrics
 
-**Retry Configuration** (`settings.yaml`):
-```yaml
-agents:
-  langchain:
-    robust:
-      config:
-        retry_policy:
-          llm_calls:
-            max_attempts: 3
-            backoff_multiplier: 2
-            initial_delay_ms: 100
-          tool_calls:
-            max_retries: 2
-            backoff_factor: 2
-            initial_delay: 1
+**Example Results**:
+```
+Dataset                        Context Precision    Faithfulness
+-------------------------------------------------------------
+astarion_conversation_01       0.8750              0.9200
+gale_conversation_03           0.9100              0.8800
 ```
 
-**Model Retry Middleware** (`infrastructure/outbound/agents/langchain_fwk/middlewares/model_retry.py`):
+### Previous Features (Still Available)
 - Exponential backoff for failed LLM calls
 - Configurable max attempts
 - Detailed retry logging

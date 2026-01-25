@@ -1,10 +1,16 @@
-# learn_ai_agents — Code Documentation (Branch 07_robust_system_v2)
+# learn_ai_agents — Code Documentation (Branch 08_llm_evaluation_v2)
 
 > This README explains the **code structure**, **component interactions**, and **implementation patterns** for this branch.
 
 ## 🆕 What's New in This Branch
 
-**Branch 07 adds:**
+**Branch 08 adds:**
+1. **RAGAS Integration**: Industry-standard RAG evaluation metrics (Context Precision, Faithfulness)
+2. **Evaluation Datasets**: Structured JSON datasets for testing RAG quality
+3. **Evaluation Script**: Automated workflow for batch evaluation with Groq LLM
+4. **Results Tracking**: JSON output for reproducible evaluation results
+
+**Branch 07 added:**
 1. **Exception Hierarchy**: Structured error handling with domain-specific exceptions
 2. **Retry Mechanisms**: Exponential backoff for resilient LLM and tool operations
 3. **Robust Agent**: Production-ready agent with error recovery and retry logic
@@ -1935,6 +1941,317 @@ pytest --cov=learn_ai_agents.application.use_cases.agents.robust tests/unit/endp
 
 ---
 
+## 📊 Branch 08: LLM Evaluation with RAGAS
+
+### Overview
+
+Branch 08 adds automated RAG evaluation using RAGAS (Retrieval Augmented Generation Assessment), enabling systematic quality measurement of our character chat agents and RAG pipeline.
+
+### Architecture
+
+#### 1. RAGAS Metrics
+
+Framework-agnostic metrics for RAG evaluation:
+
+**Context Precision**:
+Measures the relevance of retrieved contexts to the user's question.
+
+```python
+from ragas.metrics.collections import ContextPrecision
+
+metric = ContextPrecision(llm=evaluator_llm)
+score = await metric.ascore(
+    user_input="What are your abilities?",
+    reference="Expected answer with character skills...",
+    retrieved_contexts=[
+        "Character class and abilities context...",
+        "Skills and proficiencies context..."
+    ]
+)
+# Score: 0.0 to 1.0 (higher = better retrieval)
+```
+
+**What it evaluates**:
+- Are the retrieved contexts relevant to the question?
+- Does the retrieval system surface the most important information?
+- Is there noise/irrelevant content in the contexts?
+
+**Faithfulness**:
+Measures whether the generated response is grounded in the retrieved contexts.
+
+```python
+from ragas.metrics.collections import Faithfulness
+
+metric = Faithfulness(llm=evaluator_llm)
+score = await metric.ascore(
+    user_input="What are your abilities?",
+    response="Agent's actual response...",
+    retrieved_contexts=[
+        "Character class and abilities context...",
+        "Skills and proficiencies context..."
+    ]
+)
+# Score: 0.0 to 1.0 (higher = less hallucination)
+```
+
+**What it evaluates**:
+- Does the response contain information from the contexts?
+- Is the agent hallucinating facts not in the contexts?
+- Is the generated content faithful to the source material?
+
+#### 2. Evaluation Datasets
+
+Structured JSON format for systematic testing:
+
+**Dataset Structure** (`data/llm_evaluation/datasets/*.json`):
+```json
+{
+    "user_input": "User question to the agent",
+    "reference": "Expected/ideal answer (ground truth)",
+    "retrieved_contexts": [
+        "First retrieved chunk from vector store",
+        "Second retrieved chunk from vector store",
+        "Additional relevant chunks..."
+    ]
+}
+```
+
+**Creating Datasets**:
+1. **Collect real conversations**: Export actual user interactions
+2. **Manual curation**: Add expected answers (ground truth)
+3. **Context extraction**: Save what was retrieved from vector store
+4. **Format as JSON**: Structure according to schema
+
+**Example Datasets**:
+
+`astarion_conversation_01.json`:
+```json
+{
+    "user_input": "Hola, cuáles son tus habilidades",
+    "reference": "Mis habilidades son bastante... variadas...",
+    "retrieved_contexts": [
+        "(Character: Astarion)\\n# Overview\\n\\n## Starting Class...",
+        "(Character: Astarion)\\n# Overview\\n\\n## Recruitment..."
+    ]
+}
+```
+
+`gale_conversation_03.json`:
+```json
+{
+    "user_input": "¿Qué sabes de magia?",
+    "reference": "Ah, la magia! Mi especialidad...",
+    "retrieved_contexts": [
+        "(Character: Gale)\\n# Abilities\\n\\n## Spellcasting...",
+        "(Character: Gale)\\n# Background\\n\\n## Wizard Training..."
+    ]
+}
+```
+
+#### 3. Evaluation Script
+
+Automated batch evaluation workflow:
+
+**Script** (`scripts/llm_evaluation/evaluate_ragas.py`):
+```python
+"""Simple script to evaluate RAG datasets using ragas metrics."""
+
+import asyncio
+import json
+from pathlib import Path
+from openai import AsyncOpenAI
+from ragas.llms import llm_factory
+from ragas.metrics.collections import ContextPrecision, Faithfulness
+
+
+async def evaluate_dataset(dataset: dict, dataset_name: str, llm) -> dict:
+    """Evaluate a single dataset with ragas metrics."""
+    # Initialize metrics
+    context_precision = ContextPrecision(llm=llm)
+    faithfulness = Faithfulness(llm=llm)
+    
+    # Evaluate context precision
+    precision_result = await context_precision.ascore(
+        user_input=dataset["user_input"],
+        reference=dataset["reference"],
+        retrieved_contexts=dataset["retrieved_contexts"]
+    )
+    
+    # Evaluate faithfulness
+    faithfulness_result = await faithfulness.ascore(
+        user_input=dataset["user_input"],
+        response=dataset.get("response", dataset["reference"]),
+        retrieved_contexts=dataset["retrieved_contexts"]
+    )
+    
+    return {
+        "dataset_name": dataset_name,
+        "user_input": dataset["user_input"],
+        "context_precision": precision_result.value,
+        "faithfulness": faithfulness_result.value,
+    }
+
+
+async def main():
+    """Main evaluation function."""
+    # Initialize Groq LLM (OpenAI-compatible)
+    client = AsyncOpenAI(
+        api_key=os.getenv("GROQ_API_KEY"),
+        base_url="https://api.groq.com/openai/v1",
+    )
+    
+    llm = llm_factory(
+        "llama-3.3-70b-versatile",
+        provider="openai",
+        client=client,
+    )
+    
+    # Find all dataset files
+    datasets_dir = Path(__file__).parent.parent.parent / "data" / "llm_evaluation" / "datasets"
+    dataset_files = list(datasets_dir.glob("*.json"))
+    
+    # Evaluate each dataset
+    all_results = []
+    for dataset_file in dataset_files:
+        dataset = await load_dataset(dataset_file)
+        result = await evaluate_dataset(dataset, dataset_file.stem, llm)
+        all_results.append(result)
+    
+    # Save results
+    output_file = results_dir / "ragas_evaluation_results.json"
+    with open(output_file, "w") as f:
+        json.dump(all_results, f, indent=2)
+    
+    # Print summary
+    print("\\nSummary:")
+    for result in all_results:
+        print(f"{result['dataset_name']:<30} {result['context_precision']:<20.4f} {result['faithfulness']:<15.4f}")
+```
+
+**Running Evaluation**:
+```bash
+# From project root
+cd src/learn_ai_agents
+
+# Run evaluation script
+uv run python scripts/llm_evaluation/evaluate_ragas.py
+```
+
+**Output**:
+```
+============================================================
+Evaluating: astarion_conversation_01
+============================================================
+
+Evaluating Context Precision...
+Evaluating Faithfulness...
+
+Results for astarion_conversation_01:
+  Context Precision: 0.8750
+  Faithfulness:      0.9200
+
+============================================================
+Evaluating: gale_conversation_03
+============================================================
+
+Evaluating Context Precision...
+Evaluating Faithfulness...
+
+Results for gale_conversation_03:
+  Context Precision: 0.9100
+  Faithfulness:      0.8800
+
+============================================================
+Results saved to: data/llm_evaluation/results/ragas_evaluation_results.json
+============================================================
+
+Summary:
+Dataset                        Context Precision    Faithfulness
+-----------------------------------------------------------------
+astarion_conversation_01       0.8750              0.9200
+gale_conversation_03           0.9100              0.8800
+```
+
+#### 4. Results Storage
+
+**Results Format** (`data/llm_evaluation/results/ragas_evaluation_results.json`):
+```json
+[
+  {
+    "dataset_name": "astarion_conversation_01",
+    "user_input": "Hola, cuáles son tus habilidades",
+    "context_precision": 0.875,
+    "faithfulness": 0.92
+  },
+  {
+    "dataset_name": "gale_conversation_03",
+    "user_input": "¿Qué sabes de magia?",
+    "context_precision": 0.91,
+    "faithfulness": 0.88
+  }
+]
+```
+
+### Configuration
+
+**Dependencies** (`pyproject.toml`):
+```toml
+[project]
+dependencies = [
+    # ... existing dependencies ...
+    "ragas>=0.4.3",  # RAG evaluation framework
+]
+```
+
+**Environment Variables** (`.env`):
+```bash
+GROQ_API_KEY=your_groq_api_key  # Used for evaluation LLM
+```
+
+### Evaluation Workflow
+
+1. **Prepare Datasets**: Create JSON files with user inputs, references, and retrieved contexts
+2. **Run Evaluation**: Execute the RAGAS evaluation script
+3. **Review Results**: Check metrics in console and JSON output
+4. **Iterate**: Use results to improve:
+   - Retrieval quality (chunking strategy, embedding model)
+   - Context relevance (reranking, filtering)
+   - Response generation (prompts, model selection)
+5. **Track Over Time**: Compare results across iterations
+
+### Interpreting Scores
+
+**Context Precision**:
+- **0.9-1.0**: Excellent retrieval - highly relevant contexts
+- **0.7-0.9**: Good retrieval - mostly relevant with some noise
+- **0.5-0.7**: Fair retrieval - significant irrelevant content
+- **<0.5**: Poor retrieval - needs improvement
+
+**Faithfulness**:
+- **0.9-1.0**: Excellent - responses grounded in contexts
+- **0.7-0.9**: Good - minor hallucinations
+- **0.5-0.7**: Fair - noticeable hallucinations
+- **<0.5**: Poor - significant hallucinations
+
+### Best Practices
+
+1. **Diverse Datasets**: Cover different question types and difficulty levels
+2. **Real Conversations**: Use actual user interactions for authentic testing
+3. **Ground Truth**: Invest in high-quality reference answers
+4. **Regular Evaluation**: Run after each RAG pipeline change
+5. **Version Control**: Track results over time to measure improvements
+6. **Error Analysis**: Investigate low scores to identify root causes
+
+### Production Benefits
+
+1. **Quality Assurance**: Systematic measurement of RAG performance
+2. **Continuous Improvement**: Data-driven optimization of retrieval and generation
+3. **Regression Detection**: Catch quality degradation early
+4. **Baseline Establishment**: Quantify current performance
+5. **A/B Testing**: Compare different models, prompts, or configurations
+
+---
+
 ## 🎯 Key Takeaways
 
 1. **Domain is king**: Start here, keep it pure
@@ -1946,6 +2263,7 @@ pytest --cov=learn_ai_agents.application.use_cases.agents.robust tests/unit/endp
 7. **Containers manage lifecycle**: Lazy loading, proper initialization, clean shutdown
 8. **Tracing enables observability**: Full visibility into agent execution
 9. **Exceptions enable resilience**: Structured error handling and retry logic
+10. **Evaluation enables improvement**: Measure quality to guide optimization
 
 This architecture makes the code:
 - ✅ Testable (mock any dependency)
