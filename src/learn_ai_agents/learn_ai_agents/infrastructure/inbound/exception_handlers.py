@@ -7,7 +7,7 @@ import logging
 from enum import Enum
 from typing import Any
 
-from fastapi import Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from learn_ai_agents.domain.exceptions._base import (
@@ -109,12 +109,13 @@ def _create_error_response(
 
 
 async def business_rule_exception_handler(
-    request: Request, exc: BusinessRuleException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for business rule violations.
     Returns HTTP 400 Bad Request.
     """
+    assert isinstance(exc, BusinessRuleException)
     logger.warning(
         "Business rule violation",
         extra={
@@ -133,12 +134,13 @@ async def business_rule_exception_handler(
 
 
 async def resource_not_found_exception_handler(
-    request: Request, exc: ResourceNotFoundException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for resource not found errors.
     Returns HTTP 404 Not Found.
     """
+    assert isinstance(exc, ResourceNotFoundException)
     logger.info(
         "Resource not found",
         extra={
@@ -157,12 +159,13 @@ async def resource_not_found_exception_handler(
 
 
 async def invalid_request_exception_handler(
-    request: Request, exc: InvalidRequestException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for invalid request parameters.
     Returns HTTP 422 Unprocessable Entity.
     """
+    assert isinstance(exc, InvalidRequestException)
     logger.warning(
         "Invalid request",
         extra={
@@ -181,12 +184,13 @@ async def invalid_request_exception_handler(
 
 
 async def source_content_format_exception_handler(
-    request: Request, exc: SourceContentFormatException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for invalid content format errors.
     Returns HTTP 415 Unsupported Media Type.
     """
+    assert isinstance(exc, SourceContentFormatException)
     logger.warning(
         "Unsupported content format",
         extra={
@@ -208,12 +212,13 @@ async def source_content_format_exception_handler(
 
 
 async def component_validation_exception_handler(
-    request: Request, exc: ComponentValidationException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for component validation errors (invalid configuration/parameters).
     Returns HTTP 400 Bad Request.
     """
+    assert isinstance(exc, ComponentValidationException)
     logger.error(
         "Component validation error",
         extra={
@@ -233,12 +238,13 @@ async def component_validation_exception_handler(
 
 
 async def component_operation_exception_handler(
-    request: Request, exc: ComponentOperationException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for component operation errors (queries, processing, disconnection).
     Returns HTTP 503 Service Unavailable.
     """
+    assert isinstance(exc, ComponentOperationException)
     logger.error(
         "Component operation error",
         extra={
@@ -259,12 +265,13 @@ async def component_operation_exception_handler(
 
 
 async def component_exception_handler(
-    request: Request, exc: ComponentException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for component/infrastructure errors.
     Returns HTTP 503 Service Unavailable.
     """
+    assert isinstance(exc, ComponentException)
     logger.error(
         "Component error",
         extra={
@@ -302,12 +309,13 @@ async def component_exception_handler(
 
 
 async def agent_execution_exception_handler(
-    request: Request, exc: AgentExecutionException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for agent execution errors (runtime errors during graph execution).
     Returns HTTP 503 Service Unavailable.
     """
+    assert isinstance(exc, AgentExecutionException)
     logger.error(
         "Agent execution error",
         extra={
@@ -336,12 +344,13 @@ async def agent_execution_exception_handler(
 
 
 async def agent_exception_handler(
-    request: Request, exc: AgentException
+    request: Request, exc: Exception
 ) -> JSONResponse:
     """
     Handler for agent errors (fallback for non-execution agent errors).
     Returns HTTP 503 Service Unavailable.
     """
+    assert isinstance(exc, AgentException)
     logger.error(
         "Agent error",
         extra={
@@ -372,11 +381,12 @@ async def agent_exception_handler(
 # --- Generic App Exception Handler ---
 
 
-async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+async def app_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
     Fallback handler for any unhandled AppException.
     Returns HTTP 500 Internal Server Error.
     """
+    assert isinstance(exc, AppException)
     logger.error(
         "Unhandled app exception",
         extra={
@@ -419,7 +429,7 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
-def register_exception_handlers(app) -> None:
+def register_exception_handlers(app: FastAPI) -> None:
     """
     Register all exception handlers with the FastAPI application.
 

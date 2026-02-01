@@ -1,0 +1,27 @@
+# Coverage configuration for unittest
+[run]
+source = learn_ai_agents
+omit = 
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */site-packages/*
+    */.venv/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+    Protocol
+    
+precision = 2
+show_missing = True
+
+[html]
+directory = htmlcov
